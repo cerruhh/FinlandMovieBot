@@ -8,18 +8,20 @@ import html
 import smtplib as smtp
 from os.path import basename
 from os.path import abspath
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEAppliation
+from MovieClass import MovieClass
+import sources
+
+
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.application import MIMEAppliation
 
 import emailfunc
-
 #from update_json import MovieUpdateFunction
 #MovieUpdateFunction()
-Enabled=False
-FINNKINODAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
+Enabled=True
+DAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
 SEND_MAIL=False
-
 if Enabled==False:
     exit(6)
 
@@ -190,42 +192,11 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
 #MAIN
 
 #data download from FINNKINO API
-hdr={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-currentDate=dt.datetime.now()
-tomorrowDate=currentDate+dt.timedelta(FINNKINODAYOFFSET)
-#searchString=f"{tomorrowDate.day}.{currentDate.month}.{currentDate.year}"
-searchString=tomorrowDate.strftime("%d.%m.%Y")
-print(searchString)
-searchParameters={
-    "area":1002,
-    "dt":searchString
-}
-requestUrl=f"https://www.finnkino.fi/xml/Schedule/?"
-#print(f"{requestUrl}{searchParameters}")
-#if
-requestXML=requests.get(url=requestUrl,params=searchParameters,headers=hdr)
-requestXML.encoding = "UTF-8"
-requestXML.raise_for_status()
-
-#print(requestXML.text)
-#WantedData=["dttmShowStart","OriginalTitle","ProductionYear","dttmShowEnd","Theatre","TheatreAuditorium","PresentationMethod"]
-# with open(file="finnkino.xml",mode="w",encoding="UTF-8") as file:
-#     file.write(requestXML.text)
-#with open("finnkino.xml",encoding="UTF-8", mode="r") as xml_file:
-
-data_dict = xmltodict.parse(requestXML.text)
-
-if data_dict["Schedule"]["Shows"]==None:
-    print("No shows tomorrow!")
-    exit(code=123456)
-
-counter = 0
-showsDict=data_dict["Schedule"]["Shows"]["Show"]
+showsDict=sources.load_finnkino(DAYOFFSET)
 
 #first data-row, does not contain relevant data
 dataframe=pd.DataFrame(data={
         "ShowStart": "-",
-
         "ShowEnd": "-",
         "ShowTitle": "-",
         "Theatre": "-",
@@ -238,49 +209,56 @@ dataframe=pd.DataFrame(data={
 },index=[False])
 
 #df.set_index('ID', inplace=True)
-
+counter = 0
 for show in showsDict:
     # if counter>11: #print max 11 records for testing
     #     continue
     counter += 1
     # if counter==1:
     #     continue
-    showStart=ExtractTime(show["dttmShowStart"])
-    showEnd=ExtractTime(show["dttmShowEnd"])
-    showOriginalTitle=html.unescape(show["OriginalTitle"])
-    showTheatre=show["Theatre"]
-    TheatreAuditorium=show["TheatreAuditorium"]
-    PressMethod=show["PresentationMethod"]
-    ShowDate = ExtractDate(show["dttmShowStart"])
-    ShowCreationDate = show["ProductionYear"]
+    tomatoObjectN1 = returnMovieDetals(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
+    show["audience_score"]=tomatoObjectN1["audience_score"]
+    show["tomatometer"]=tomatoObjectN1["tomatometer"]
+    #
+    # showStart=ExtractTime(show["dttmShowStart"])
+    # showEnd=ExtractTime(show["dttmShowEnd"])
+    # showOriginalTitle=
+    # showTheatre=show["Theatre"]
+    # TheatreAuditorium=show["TheatreAuditorium"]
+    # PressMethod=show["PresentationMethod"]
+    # ShowDate = ExtractDate(show["dttmShowStart"])
+    # ShowCreationDate = show["ProductionYear"]
+
     # print("movie: " + showOriginalTitle + " FinnKino production year: " + str(ShowCreationDate))
 
-    tomatoObjectN1 = returnMovieDetals(movienametest=showOriginalTitle,movieyearFinnKino=str(ShowCreationDate))
+
     #print("TomatoooObjectok1")
     #print(tomatoObject)
+    movie_class=MovieClass(show)
 
     #print("movie: " + showOriginalTitle + " tomatoObject2: " + str(tomatoObjectN1))
-    dataframe.loc[len(dataframe)] ={
-        "ShowStart":showStart,
-        "ShowEnd":showEnd,
-        "ShowTitle":showOriginalTitle,
-        "Theatre":showTheatre,
-        "Auditorium":TheatreAuditorium,
-        "PresentationMethod":PressMethod,
-        "ShowDate": ShowDate,
-        "ProductionYear": ShowCreationDate,
-        "AudienceScore":tomatoObjectN1["audience_score"],
-        "TomatoScore":tomatoObjectN1["tomatometer"],
-    }
+    dataframe.loc[len(dataframe)] =movie_class.datasample
+    #     {
+    #     "ShowStart":showStart,
+    #     "ShowEnd":showEnd,
+    #     "ShowTitle":showOriginalTitle,
+    #     "Theatre":showTheatre,
+    #     "Auditorium":TheatreAuditorium,
+    #     "PresentationMethod":PressMethod,
+    #     "ShowDate": ShowDate,
+    #     "ProductionYear": ShowCreationDate,
+    #     "AudienceScore":tomatoObjectN1["audience_score"],
+    #     "TomatoScore":tomatoObjectN1["tomatometer"],
+    # }
 
 # print all to output file
 dataframe = dataframe.reset_index()
 dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
 #encoding="UTF-8"
 dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
-
+showsDict=sources.load_finnkino(day_offset=DAYOFFSET,give_all=False)
 # Print Finnkino data for analysis:
-json_data = json.dumps(data_dict)
+json_data = json.dumps(showsDict,indent=2)
 json_data.encode("UTF-8")
 with open(file=abspath("Data/finnkino.json"),mode="w") as json_file:
     json_file.write(json_data)
@@ -317,6 +295,7 @@ FILE_LIST=[
     # "Data/finnkino.json"
 ]
 if SEND_MAIL and __name__=="__main__":
+    print("preparing sending files by email")
     emailfunc.SendMail()
 
-print("preparing sending files by email")
+
