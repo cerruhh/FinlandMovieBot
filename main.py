@@ -39,22 +39,11 @@ now_Date=dt.datetime.now()
 Cur_WeekDay=now_Date.weekday()
 
 
-
-
 class MovieNotFound(Exception):
     pass
 
 class NainDeStainError(Exception):
     pass
-
-# with open(file="Data/tomato.json",encoding="UTF-8",mode="r+") as file:
-#     js = json.load(file)
-#     try:
-#         jsResponse=js["Movies"]
-#     except(KeyError,json.JSONDecodeError):
-#         js["Movies"]={}
-
-
 
 def ExtractTime(time:str):
     #print(time[11:16])
@@ -81,7 +70,7 @@ def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,mov
             with open(file=json_cache,mode="r+") as file:
                 json_data=json.load(file)
                 #print(json_data["Movies"])
-                print(f"Cache:True, moviename: {html.unescape(moviename)},status:Cache")
+                #print(f"Cache:True, moviename: {html.unescape(moviename)},status:Cache")
         except(FileNotFoundError,json.JSONDecodeError) as errorMessage:
             with open(file=json_cache,mode="r+",encoding="UTF-8",newline=None) as json_file:
                 json.dump({
@@ -242,10 +231,7 @@ for show in showsDict:
 
 # print all to output file
 dataframe = dataframe.reset_index()
-print(dataframe.head())
 dataframe = dataframe.sort_values(by=["ShowStart"])
-print(dataframe.head())
-
 dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
 #encoding="UTF-8"
 dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")

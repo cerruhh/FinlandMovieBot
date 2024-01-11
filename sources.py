@@ -1,10 +1,11 @@
 import datetime as dt
+
 from selenium.webdriver.support import expected_conditions as EC
 
 import xmltodict
 import re
 import requests
-import logging
+
 from selenium.webdriver import Chrome
 from selenium.webdriver import ChromeOptions
 from bs4 import BeautifulSoup
@@ -14,6 +15,18 @@ from time import sleep as wait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.ui import Select
+
+#calcDate converts offset day to date in format 2025-05-18, where 0 is today, 1 is tomorrow
+def calcDate(offset:int):
+    targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
+    return targetDate.strftime("%Y-%m-%d")
+
+def normalizeTitle(title: str):
+    removeWords= (["BARNSÖNDAGAR: ", "testingtesting"])
+    for censoredWord in removeWords:
+        title = title.replace(censoredWord,"")
+        return title
+
 
 def convertOneDigit2Two(digit:str):
     if len(digit)==1:
@@ -31,7 +44,9 @@ def load_finnkino(day_offset:int,give_all:bool=False):
         "dt": searchString
     }
     requestUrl = f"https://www.finnkino.fi/xml/Schedule/?"
+
     requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
+    print(f"Opening API with URL: {requestUrl}/{searchParameters}")
     requestXML.encoding = "UTF-8"
     requestXML.raise_for_status()
 
@@ -47,11 +62,13 @@ def load_finnkino(day_offset:int,give_all:bool=False):
 
 
 def load_biorex(day_offset:int):
+    URL = "https://biorex.fi/"
     ch_opt=ChromeOptions()
     ch_opt.add_argument("--headless")
 
     driver = Chrome(ch_opt)
-    driver.get("https://biorex.fi/")
+    print(f"Opening headless Chrome browser with URL: {URL}")
+    driver.get(URL)
 
     # Set up headless Chrome browser
     # chromeOptions = ChromeOptions()
@@ -84,19 +101,14 @@ def load_biorex(day_offset:int):
 
             time = time_and_date.split(" ")[2].strip()
             date_day = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[0].strip())
-            #test = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[0].strip())
             date_month = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[1].strip())
             date = f"{dt.datetime.now().year}-{date_month}-{date_day}"
-            #print(f"time and date: {time_and_date} and date: {date} and test {test}")
-            # location = movie_card.select_one('span.movie-carousel__showtime-cinema').text.strip()
             auditorium = movie_card.select_one('span.movie-carousel__showtime-screen').text.strip()
-            movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,"dttmShowStart":f"{date}T{time}:00", "Theatre":"Biorex, Tripla","ProductionYear":"not_finnkino","dttmShowEnd":"NA","PresentationMethod":"NA"})
-            print(f"{title} - {date} - {time} - Biorex Tripla -  {auditorium}")
+            if calcDate(day_offset) == date:
+                movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,"dttmShowStart":f"{date}T{time}:00", "Theatre":"Biorex, Tripla","ProductionYear":"","dttmShowEnd":"","PresentationMethod":""})
+                print(f"{title} - {date} - {time} - Biorex Tripla -  {auditorium}")
     # Close the driver
     driver.quit()
-
-    # Print the list of movies
-    print(movies)
     return movies
 
 
@@ -112,11 +124,11 @@ def load_kinotfi(day_offset):
     chOptions.add_argument("--headless")
 
     # Set up logging
-    logging.basicConfig(level=logging.INFO)
+    #logging.basicConfig(level=logging.INFO)
 
     with Chrome(options=chOptions) as browser:
         browser.get(URL)
-        logging.info(f"Opening headless Chrome browser with URL: {URL}")
+        print(f"Opening headless Chrome browser with URL: {URL}")
         wait(LOAD_TIME)
         html = browser.page_source
 
@@ -129,30 +141,27 @@ def load_kinotfi(day_offset):
     movies = []  # Create an empty dictionary to store the movie information
     for date in dates:
         i += 1
-        logging.info(f"## {i} date: {date}")
+        #logging.info(f"## {i} date: {date}")
         date_str = date.text.strip()
         for movie in date.find_next_siblings():
             # check if the html contains class="show-item"
             if re.search(r'class="show-item"', str(movie)):
-                title = str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip()
+                title = normalizeTitle(str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip())
                 times = [time.text.strip() for time in movie.select(".time")]
                 theater = movie.select_one(".theater").text.strip()
                 # logging.info(f"#### {i} title: {title} times {times} theater {theater}")
                 for time in times:
                     day_of_month = date_str.split(sep=" ")[1].split(".")
                     datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
-                    # print(L_time)
-                    #movies.append({"dttmShowStart": datestring, "OriginalTitle": title, "time": time, "Theatre": theater})
-                    if int(convertOneDigit2Two(day_of_month[0]))==dt.datetime.now().day and day_offset==1:
-                        continue
-                    movies.append({'OriginalTitle': title, 'TheatreAuditorium': theater,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":"kinot.fi","ProductionYear":"not_finnkino", "dttmShowEnd":"NA","PresentationMethod":"NA"})
-
+                    if calcDate(day_offset) == datestring:
+                        movies.append({'OriginalTitle': title, 'TheatreAuditorium':"" ,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":theater,"ProductionYear":"", "dttmShowEnd":"","PresentationMethod":"NA"})
+                        print(f"{title} - {datestring} - {time} - {theater}")
     return movies
 
 
 def load_all(day_offset:int=1):
     dataarray =  []
-   # dataarray =  load_biorex(day_offset=day_offset)
+    dataarray =  load_biorex(day_offset=day_offset)
     dataarray += load_kinotfi(day_offset=day_offset)
     dataarray += load_finnkino(day_offset=day_offset)
     return dataarray
