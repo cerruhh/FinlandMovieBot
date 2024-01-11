@@ -58,10 +58,16 @@ class NainDeStainError(Exception):
 
 def ExtractTime(time:str):
     #print(time[11:16])
-    return time[11:16]
+    if len(time) < 15:
+        return "NA"
+    else:
+        return time[11:16]
 
 def ExtractDate(time:str):
-    return time[0:10]
+    if len(time) < 10:
+        return "NA"
+    else:
+        return time[0:10]
 
 def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,moviename:str="wonka",movieyear:str="2023"):
     if __name__!="__main__":
@@ -176,10 +182,18 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
     #print(fetchedData)
     if fetchedData["status"]!=404:
         # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
-        if str(fetchedData["year"])!=movieyearFinnKino:
-            fetchedData["audience_score"]="NA"
-            fetchedData["tomatometer"]="NA"
-            fetchedData["status"]=404
+        try:
+
+            if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "not_finnkino":
+                fetchedData["audience_score"] = "NA"
+                fetchedData["tomatometer"] = "NA"
+                fetchedData["status"] = 404
+        except(KeyError):
+            print(f" Key Error!!! returnMovieDetails {fetchedData}")
+            temp = str(fetchedData["year"])
+            print(f"fetchedData - {movienametest} - {temp} - {movieyearFinnKino}")
+            return {}
+
     return fetchedData
 
 
@@ -191,8 +205,8 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
 
 #MAIN
 
-#data download from FINNKINO API
-showsDict=sources.load_finnkino(DAYOFFSET)
+showsDict=sources.load_all(DAYOFFSET)
+
 
 #first data-row, does not contain relevant data
 dataframe=pd.DataFrame(data={
@@ -211,52 +225,31 @@ dataframe=pd.DataFrame(data={
 #df.set_index('ID', inplace=True)
 counter = 0
 for show in showsDict:
-    # if counter>11: #print max 11 records for testing
-    #     continue
     counter += 1
-    # if counter==1:
-    #     continue
+
     tomatoObjectN1 = returnMovieDetals(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
-    show["audience_score"]=tomatoObjectN1["audience_score"]
-    show["tomatometer"]=tomatoObjectN1["tomatometer"]
-    #
-    # showStart=ExtractTime(show["dttmShowStart"])
-    # showEnd=ExtractTime(show["dttmShowEnd"])
-    # showOriginalTitle=
-    # showTheatre=show["Theatre"]
-    # TheatreAuditorium=show["TheatreAuditorium"]
-    # PressMethod=show["PresentationMethod"]
-    # ShowDate = ExtractDate(show["dttmShowStart"])
-    # ShowCreationDate = show["ProductionYear"]
+    if tomatoObjectN1 != {}:
+        show["audience_score"]=tomatoObjectN1["audience_score"]
+        show["tomatometer"]=tomatoObjectN1["tomatometer"]
+        movie_class=MovieClass(show)
+        dataframe.loc[len(dataframe)] =movie_class.datasample
+    else:
+        show["audience_score"]="NA"
+        show["tomatometer"]="NA"
+        movie_class=MovieClass(show)
+        dataframe.loc[len(dataframe)] =movie_class.datasample
 
-    # print("movie: " + showOriginalTitle + " FinnKino production year: " + str(ShowCreationDate))
-
-
-    #print("TomatoooObjectok1")
-    #print(tomatoObject)
-    movie_class=MovieClass(show)
-
-    #print("movie: " + showOriginalTitle + " tomatoObject2: " + str(tomatoObjectN1))
-    dataframe.loc[len(dataframe)] =movie_class.datasample
-    #     {
-    #     "ShowStart":showStart,
-    #     "ShowEnd":showEnd,
-    #     "ShowTitle":showOriginalTitle,
-    #     "Theatre":showTheatre,
-    #     "Auditorium":TheatreAuditorium,
-    #     "PresentationMethod":PressMethod,
-    #     "ShowDate": ShowDate,
-    #     "ProductionYear": ShowCreationDate,
-    #     "AudienceScore":tomatoObjectN1["audience_score"],
-    #     "TomatoScore":tomatoObjectN1["tomatometer"],
-    # }
 
 # print all to output file
 dataframe = dataframe.reset_index()
+print(dataframe.head())
+dataframe = dataframe.sort_values(by=["ShowStart"])
+print(dataframe.head())
+
 dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
 #encoding="UTF-8"
 dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
-showsDict=sources.load_finnkino(day_offset=DAYOFFSET,give_all=False)
+showsDict=sources.load_finnkino(day_offset=DAYOFFSET)
 # Print Finnkino data for analysis:
 json_data = json.dumps(showsDict,indent=2)
 json_data.encode("UTF-8")

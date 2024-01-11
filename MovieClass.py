@@ -24,16 +24,55 @@ class MovieClass:
         # self.movie_year = movieyear
         # self.movie2D_or_3D = movie_2Dor3D
 
-        self.showStart = ExtractTime(showdict["dttmShowStart"])
-        self.showEnd = ExtractTime(showdict["dttmShowEnd"])
-        self.showOriginalTitle = html.unescape(showdict["OriginalTitle"])
-        self.showTheatre = showdict["Theatre"]
-        self.TheatreAuditorium = showdict["TheatreAuditorium"]
-        self.PressMethod = showdict["PresentationMethod"]
-        self.ShowDate = ExtractDate(showdict["dttmShowStart"])
-        self.ShowCreationDate = showdict["ProductionYear"]
-        self.audience_score=showdict["audience_score"]
-        self.tomato_meter=showdict["tomatometer"]
+        if ("dttmShowStart" in showdict):
+            self.showStart = ExtractTime(showdict["dttmShowStart"])
+        else:
+            self.showStart = "NA"
+
+        if ("dttmShowEnd" in showdict):
+            self.showEnd = ExtractTime(showdict["dttmShowEnd"])
+        else:
+            self.showEnd = "NA"
+
+        if ("OriginalTitle" in showdict):
+            self.showOriginalTitle = html.unescape(showdict["OriginalTitle"])
+        else:
+            self.showOriginalTitle = "NA"
+
+        if ("Theatre" in showdict):
+            self.showTheatre = showdict["Theatre"]
+        else:
+            self.showTheatre = "NA"
+
+        if ("TheatreAuditorium" in showdict):
+            self.TheatreAuditorium = showdict["TheatreAuditorium"]
+        else:
+            self.TheatreAuditorium = "NA"
+
+        if ("PresentationMethod" in showdict):
+            self.PressMethod = showdict["PresentationMethod"]
+        else:
+            self.PressMethod = "NA"
+
+        if ("dttmShowStart" in showdict):
+            self.ShowDate = ExtractDate(showdict["dttmShowStart"])
+        else:
+            self.ShowDate = "NA"
+
+        if ("ProductionYear" in showdict):
+            self.ShowCreationDate = showdict["ProductionYear"]
+        else:
+            self.ShowCreationDate = "NA"
+
+        if ("audience_score" in showdict):
+            self.audience_score=showdict["audience_score"]
+        else:
+            self.audience_score = "NA"
+
+        if ("tomatometer" in showdict):
+            self.tomato_meter=showdict["tomatometer"]
+        else:
+            self.tomato_meter = "NA"
 
         self.datasample={
             "ShowStart": self.showStart,

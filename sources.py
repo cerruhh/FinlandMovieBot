@@ -1,4 +1,6 @@
 import datetime as dt
+from selenium.webdriver.support import expected_conditions as EC
+
 import xmltodict
 import re
 import requests
@@ -8,7 +10,16 @@ from selenium.webdriver import ChromeOptions
 from bs4 import BeautifulSoup
 from time import sleep as wait
 
+#from selenium.webdriver import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select
 
+def convertOneDigit2Two(digit:str):
+    if len(digit)==1:
+        return f"0{digit}"
+    else:
+        return digit[:2]
 def load_finnkino(day_offset:int,give_all:bool=False):
     hdr = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
@@ -35,8 +46,62 @@ def load_finnkino(day_offset:int,give_all:bool=False):
         return data_dict["Schedule"]["Shows"]["Show"]
 
 
-def load_kinotfi(day_offset):
+def load_biorex(day_offset:int):
+    ch_opt=ChromeOptions()
+    ch_opt.add_argument("--headless")
 
+    driver = Chrome(ch_opt)
+    driver.get("https://biorex.fi/")
+
+    # Set up headless Chrome browser
+    # chromeOptions = ChromeOptions()
+    # chromeOptions.add_experimental_option(value=True, name="detach")
+    # chromeOptions.add_argument("--headless")
+
+    # Click the "Hyväksi kaikki evästeet" button
+    webWait = WebDriverWait(driver, 5)
+    accept_button = webWait.until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler")))
+    accept_button.click()
+
+    # Select "Tripla" from the "Valitse teatteri" dropdown
+    teatteri_dropdown = Select(driver.find_element(by=By.ID, value="choose_location"))
+    teatteri_dropdown.select_by_visible_text("Helsinki (Tripla)")
+
+    # Wait for the page to load
+    wait(5)
+
+    # Get the page source and parse it with BeautifulSoup
+    page_source = driver.page_source
+    soup = BeautifulSoup(page_source, 'html.parser')
+
+    # Find all the movie cards and extract the relevant information
+    movies = []
+    for movie_card in soup.select('div.movie-card'):
+        if re.search(r'class="movie-card__title"', str(movie_card)) and re.search(
+                r'class="movie-carousel__showtime-time"', str(movie_card)):
+            title = movie_card.select_one('h3.movie-card__title').text.split(" (")[0].strip()
+            time_and_date = movie_card.select_one('span.movie-carousel__showtime-time').text.strip()
+
+            time = time_and_date.split(" ")[2].strip()
+            date_day = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[0].strip())
+            #test = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[0].strip())
+            date_month = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[1].strip())
+            date = f"{dt.datetime.now().year}-{date_month}-{date_day}"
+            #print(f"time and date: {time_and_date} and date: {date} and test {test}")
+            # location = movie_card.select_one('span.movie-carousel__showtime-cinema').text.strip()
+            auditorium = movie_card.select_one('span.movie-carousel__showtime-screen').text.strip()
+            movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,"dttmShowStart":f"{date}T{time}:00", "Theatre":"Biorex, Tripla","ProductionYear":"not_finnkino","dttmShowEnd":"NA","PresentationMethod":"NA"})
+            print(f"{title} - {date} - {time} - Biorex Tripla -  {auditorium}")
+    # Close the driver
+    driver.quit()
+
+    # Print the list of movies
+    print(movies)
+    return movies
+
+
+
+def load_kinotfi(day_offset):
 
     URL = "https://www.kinot.fi/"
     LOAD_TIME = 4
@@ -69,15 +134,28 @@ def load_kinotfi(day_offset):
         for movie in date.find_next_siblings():
             # check if the html contains class="show-item"
             if re.search(r'class="show-item"', str(movie)):
-                title = movie.select_one(".movie-title-container h3").text.strip()
+                title = str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip()
                 times = [time.text.strip() for time in movie.select(".time")]
                 theater = movie.select_one(".theater").text.strip()
                 # logging.info(f"#### {i} title: {title} times {times} theater {theater}")
                 for time in times:
                     day_of_month = date_str.split(sep=" ")[1].split(".")
-                    datestring = f"{dt.datetime.now().year}-{day_of_month[1]}-{day_of_month[0]}"
+                    datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
                     # print(L_time)
-                    movies.append({"date": datestring, "title": title, "time": time, "theater": theater})
+                    #movies.append({"dttmShowStart": datestring, "OriginalTitle": title, "time": time, "Theatre": theater})
+                    if int(convertOneDigit2Two(day_of_month[0]))==dt.datetime.now().day and day_offset==1:
+                        continue
+                    movies.append({'OriginalTitle': title, 'TheatreAuditorium': theater,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":"kinot.fi","ProductionYear":"not_finnkino", "dttmShowEnd":"NA","PresentationMethod":"NA"})
 
-    print(movies)
+    return movies
+
+
+def load_all(day_offset:int=1):
+    dataarray =  []
+   # dataarray =  load_biorex(day_offset=day_offset)
+    dataarray += load_kinotfi(day_offset=day_offset)
+    dataarray += load_finnkino(day_offset=day_offset)
+    return dataarray
+
+
 
