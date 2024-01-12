@@ -1,40 +1,22 @@
 import requests
 import datetime as dt
 import pandas as pd
-import xmltodict
 import json
-import openpyxl
 import html
-import smtplib as smtp
-from os.path import basename
 from os.path import abspath
+
 from MovieClass import MovieClass
 import sources
-
-
-# from email.mime.text import MIMEText
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.application import MIMEAppliation
-
 import emailfunc
 #from update_json import MovieUpdateFunction
 #MovieUpdateFunction()
 Enabled=True
 DAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
-SEND_MAIL=False
+SEND_MAIL=True
 if Enabled==False:
+
     exit(6)
 
-
-# now = dt.datetime.now()
-# #opa
-# if now.month==10 and now.day ==21:
-#     connection = smtp.SMTP("smtp.gmail.com", port=587)
-#     connection.starttls()Content-Type: text/html; charset=Shift_JIS
-#     connection.login(user=EMAIL, password=KEY)
-#     connection.sendmail(from_addr=EMAIL, to_addrs=family_emails[0],
-#                         msg="Subject:waar is de man van toadish?\n\nDit is een belangrijke vraag")
-#     connection.close()
 now_Date=dt.datetime.now()
 Cur_WeekDay=now_Date.weekday()
 
@@ -58,11 +40,11 @@ def ExtractDate(time:str):
     else:
         return time[0:10]
 
-def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,moviename:str="wonka",movieyear:str="2023"):
+def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,moviename:str,movieyear:str="2023"):
     if __name__!="__main__":
         raise NainDeStainError
-        return 0
-    if update==True:
+
+    if update:
         json_data=None
         print("json data Update true")
     else:
@@ -70,7 +52,7 @@ def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,mov
             with open(file=json_cache,mode="r+") as file:
                 json_data=json.load(file)
                 #print(json_data["Movies"])
-                #print(f"Cache:True, moviename: {html.unescape(moviename)},status:Cache")
+                print(f"Cache:True, moviename: {html.unescape(moviename)}")
         except(FileNotFoundError,json.JSONDecodeError) as errorMessage:
             with open(file=json_cache,mode="r+",encoding="UTF-8",newline=None) as json_file:
                 json.dump({
@@ -93,18 +75,14 @@ def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,mov
                 thirtyDaysAgo = dt.datetime.now() - dt.timedelta(days=30)
                 #print(type(jsondate))
                 if jsondate < thirtyDaysAgo:
-                    print("Cache is outdate, cache: False")
+                    print("Cache is outdated, cache: False")
                     json_data=None
                 else:
                     return jsonresponse   #tomato object returned from cache (and is uptodate)
 
 ######### nothing found in the cache, now check API ################################
         now = str(dt.datetime.now())
-
         if json_data==None or json_data["Movies"]=={}: # or dateinjson < thirtyDaysAgo
-
-
-
             url=f"{url}{moviename}"
             print("Cache not found: now searching via API: " + url)
             JSD=requests.get(url=url)
@@ -133,17 +111,10 @@ def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,mov
                     "audience_score":"NA",
                     "tomatometer":"NA",
                     "updated":now
-
                 }
-                # print("write movie without result to cache")
-                # jsd["Movies"][moviename]={
-                #     "status":404
-                # }
 
             with open(file=json_cache, mode="w", encoding="UTF-8") as file:
                 json.dump(jsd,file,indent=3)
-
-
 
             #print(f"Cache: False, moviename: {moviename}, IsMovieFound: {movieFound}")
             if movieFound:
@@ -173,7 +144,7 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
         # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
         try:
 
-            if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "not_finnkino":
+            if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "NA":
                 fetchedData["audience_score"] = "NA"
                 fetchedData["tomatometer"] = "NA"
                 fetchedData["status"] = 404
@@ -235,12 +206,6 @@ dataframe = dataframe.sort_values(by=["ShowStart"])
 dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
 #encoding="UTF-8"
 dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
-showsDict=sources.load_finnkino(day_offset=DAYOFFSET)
-# Print Finnkino data for analysis:
-json_data = json.dumps(showsDict,indent=2)
-json_data.encode("UTF-8")
-with open(file=abspath("Data/finnkino.json"),mode="w") as json_file:
-    json_file.write(json_data)
 
 with open(file=abspath("Data/output.txt"),mode="w",encoding="UTF-8") as file:
     file.truncate(0)
@@ -276,5 +241,3 @@ FILE_LIST=[
 if SEND_MAIL and __name__=="__main__":
     print("preparing sending files by email")
     emailfunc.SendMail()
-
-

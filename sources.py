@@ -1,28 +1,34 @@
-import datetime as dt
-
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver import Chrome
+from selenium.webdriver import ChromeOptions
+from os.path import abspath
 
+
+import xmltodict
+import json
 import xmltodict
 import re
 import requests
-
-from selenium.webdriver import Chrome
-from selenium.webdriver import ChromeOptions
-from bs4 import BeautifulSoup
+import datetime as dt
 from time import sleep as wait
-
-#from selenium.webdriver import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support.ui import Select
+from bs4 import BeautifulSoup
 
 #calcDate converts offset day to date in format 2025-05-18, where 0 is today, 1 is tomorrow
 def calcDate(offset:int):
     targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
     return targetDate.strftime("%Y-%m-%d")
 
+def calcDateShort(offset:int):
+    targetDate = dt.datetime.today() + dt.timedelta(days=offset)
+    return targetDate.strftime("%d-").lstrip("0") +  targetDate.strftime("%m-%Y").lstrip("0")
+
 def normalizeTitle(title: str):
-    removeWords= (["BARNSÖNDAGAR: ", "testingtesting"])
+    removeWords=("BARNSÖNDAGAR: ","mörkömanvandestaatfilmmetergewoorden.")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
         return title
@@ -33,6 +39,7 @@ def convertOneDigit2Two(digit:str):
         return f"0{digit}"
     else:
         return digit[:2]
+
 def load_finnkino(day_offset:int,give_all:bool=False):
     hdr = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
@@ -51,6 +58,13 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     requestXML.raise_for_status()
 
     data_dict = xmltodict.parse(requestXML.text)
+    showsDict = data_dict["Schedule"]["Shows"]["Show"]
+
+    # Print Finnkino data for analysis:
+    json_data = json.dumps(showsDict, indent=2)
+    json_data.encode("UTF-8")
+    with open(file=abspath("Data/finnkino.json"), mode="w") as json_file:
+        json_file.write(json_data)
 
     if data_dict["Schedule"]["Shows"] == None:
         print("No shows tomorrow!")
@@ -62,27 +76,55 @@ def load_finnkino(day_offset:int,give_all:bool=False):
 
 
 def load_biorex(day_offset:int):
-    URL = "https://biorex.fi/"
+    #URL = "https://biorex.fi/"
+    URL = "https://biorex.fi/en/movies/?type=showtimes"
     ch_opt=ChromeOptions()
     ch_opt.add_argument("--headless")
 
+    #ch_opt.add_experimental_option("detach", True)
+
     driver = Chrome(ch_opt)
-    print(f"Opening headless Chrome browser with URL: {URL}")
+    date = calcDate(day_offset)
+    print(f"Opening headless Chrome browser with URL: {URL} with {date}")
     driver.get(URL)
 
-    # Set up headless Chrome browser
-    # chromeOptions = ChromeOptions()
-    # chromeOptions.add_experimental_option(value=True, name="detach")
-    # chromeOptions.add_argument("--headless")
-
     # Click the "Hyväksi kaikki evästeet" button
-    webWait = WebDriverWait(driver, 5)
+    webWait = WebDriverWait(driver, 3)
     accept_button = webWait.until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler")))
     accept_button.click()
 
     # Select "Tripla" from the "Valitse teatteri" dropdown
     teatteri_dropdown = Select(driver.find_element(by=By.ID, value="choose_location"))
     teatteri_dropdown.select_by_visible_text("Helsinki (Tripla)")
+
+    #select all Helsinki movies
+    wait(2)
+    # Find the button by its data-slug attribute (select all theaters in Helsinki
+    button = driver.find_element(By.CSS_SELECTOR, "button[data-slug='all']")
+    button.click()
+    #print("select all cinema's")
+
+    # Locate the “Show times” button using its data-type attribute and click it:
+    show_times_button = driver.find_element(By.CSS_SELECTOR, "a[data-type='showtimes']")
+    show_times_button.click()
+    #print("select Show times instead Movies")
+
+#    dropdown  = Select(driver.find(by=By.ID, value="dayselect"))
+
+
+    #print (targetDate)
+
+    dropdown = driver.find_element(by=By.CLASS_NAME, value="choices__list")
+    dropdown.click()
+    #print("Select date: " + calcDate((day_offset)))
+    wait(1)
+    action = ActionChains(driver)
+    counter = 0
+    for i in range(day_offset+1):
+        counter += 1
+        action.send_keys(Keys.DOWN).perform(); #press down key arrow depending on the date
+    action.send_keys(Keys.ENTER).perform() #press ENTER
+
 
     # Wait for the page to load
     wait(5)
@@ -93,22 +135,16 @@ def load_biorex(day_offset:int):
 
     # Find all the movie cards and extract the relevant information
     movies = []
-    for movie_card in soup.select('div.movie-card'):
-        if re.search(r'class="movie-card__title"', str(movie_card)) and re.search(
-                r'class="movie-carousel__showtime-time"', str(movie_card)):
-            title = movie_card.select_one('h3.movie-card__title').text.split(" (")[0].strip()
-            time_and_date = movie_card.select_one('span.movie-carousel__showtime-time').text.strip()
-
-            time = time_and_date.split(" ")[2].strip()
-            date_day = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[0].strip())
-            date_month = convertOneDigit2Two(time_and_date.split(" ")[1].split(".")[1].strip())
-            date = f"{dt.datetime.now().year}-{date_month}-{date_day}"
-            auditorium = movie_card.select_one('span.movie-carousel__showtime-screen').text.strip()
-            if calcDate(day_offset) == date:
-                movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,"dttmShowStart":f"{date}T{time}:00", "Theatre":"Biorex, Tripla","ProductionYear":"","dttmShowEnd":"","PresentationMethod":""})
-                print(f"{title} - {date} - {time} - Biorex Tripla -  {auditorium}")
+    for movie_card in soup.select('div.showtime-item__entry'):
+        title = movie_card.select_one('span.showtime-item__movie-name__value').text.split(" (")[0].strip()
+        time = movie_card.find('div', {'class': 'showtime-item__start'}).text.strip()
+        location = movie_card.select_one("div.showtime-item__place__value").text.strip().split(",")
+        theater = location[0].strip()
+        auditorium = location[1].strip()
+        movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,'dttmShowStart':f"{date}T{time}:00", "Theatre":f"{theater}", "ProductionYear":'NA','dttmShowEnd':'NA','PresentationMethod':'NA'})
+        #print(f"{title} - {date} - {time} - {theater} - {auditorium}")
     # Close the driver
-    driver.quit()
+    #driver.quit()
     return movies
 
 
@@ -120,7 +156,7 @@ def load_kinotfi(day_offset):
 
     # Set up headless Chrome browser
     chOptions = ChromeOptions()
-    chOptions.add_experimental_option(value=True, name="detach")
+    #chOptions.add_experimental_option(value=True, name="detach")
     chOptions.add_argument("--headless")
 
     # Set up logging
@@ -155,14 +191,15 @@ def load_kinotfi(day_offset):
                     datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
                     if calcDate(day_offset) == datestring:
                         movies.append({'OriginalTitle': title, 'TheatreAuditorium':"" ,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":theater,"ProductionYear":"", "dttmShowEnd":"","PresentationMethod":"NA"})
-                        print(f"{title} - {datestring} - {time} - {theater}")
+                        #print(f"{title} - {datestring} - {time} - {theater}")
+    browser.quit()
     return movies
 
 
 def load_all(day_offset:int=1):
     dataarray =  []
-    dataarray =  load_biorex(day_offset=day_offset)
-    dataarray += load_kinotfi(day_offset=day_offset)
+    #dataarray =  load_biorex(day_offset=day_offset)
+    #dataarray += load_kinotfi(day_offset=day_offset)
     dataarray += load_finnkino(day_offset=day_offset)
     return dataarray
 
