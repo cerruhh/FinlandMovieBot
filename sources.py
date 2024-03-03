@@ -18,16 +18,36 @@ import datetime as dt
 from time import sleep as wait
 from bs4 import BeautifulSoup
 
-#calcDate converts offset day to date in format 2025-05-18, where 0 is today, 1 is tomorrow
+
 def calcDate(offset:int):
+    """
+    calcDate converts offset day to date in format 2025-05-18, where arg offset 0 is today, 1 is tomorrow
+    """
+
     targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
     return targetDate.strftime("%Y-%m-%d")
 
+def calcDateFinnish(offset:int):
+    """
+    calcDateFinnish converts offset day to date in format 18.05.2024, where arg offset 0 is today, 1 is tomorrow
+    """
+
+    targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
+    return targetDate.strftime("%d.%m.%Y")
+
 def calcDateShort(offset:int):
+    """
+    calcDateShort converts offset day to date in format 8-5-2024, where arg offset=0 is today, 1 is tomorrow
+    """
+
     targetDate = dt.datetime.today() + dt.timedelta(days=offset)
     return targetDate.strftime("%d-").lstrip("0") +  targetDate.strftime("%m-%Y").lstrip("0")
 
 def normalizeTitle(title: str):
+    """
+    function that will remove some words from any text
+    """
+
     removeWords=("BARNSÖNDAGAR: ","mörkömanvandestaatfilmmetergewoorden.")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
@@ -41,23 +61,44 @@ def convertOneDigit2Two(digit:str):
         return digit[:2]
 
 def load_finnkino(day_offset:int,give_all:bool=False):
+    # hdr = {
+     #   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
     hdr = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+        'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'}
     currentDate = dt.datetime.now()
     tomorrowDate = currentDate + dt.timedelta(day_offset)
     searchString = tomorrowDate.strftime("%d.%m.%Y")
-    searchParameters = {
-        "area": 1002,
-        "dt": searchString
-    }
-    requestUrl = f"https://www.finnkino.fi/xml/Schedule/?"
+    # searchParameters = {
+    #    "area": 1002,
+    #    "dt": searchString
+    # }
 
-    requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
-    print(f"Opening API with URL: {requestUrl}/{searchParameters}")
-    requestXML.encoding = "UTF-8"
-    requestXML.raise_for_status()
+    requestUrl = f"https://www.finnkino.fi/xml/Schedule/?area=1002&dt={calcDateFinnish(day_offset)}"
+#    requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
 
-    data_dict = xmltodict.parse(requestXML.text)
+    print(f"Opening API with URL: {requestUrl}")
+
+    ch_opt=ChromeOptions()
+    # ch_opt.add_argument("--headless")
+    ch_opt.add_experimental_option("detach", True)
+
+    with Chrome(options=ch_opt) as browser:
+        browser.get(requestUrl)
+        print(f"Opening headless Chrome browser with URL: {requestUrl}")
+        wait(3)
+        html = browser.page_source
+
+    requestXML = BeautifulSoup(html, "xml")
+    long_result = (requestXML.text)
+    print(long_result)
+    target = "<Schedule xmlns:xsd" # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
+    index = long_result.find(target)
+    result =  long_result[index:]
+
+    #requestXML.encoding = "UTF-8"
+    #requestXML.raise_for_status()
+
+    data_dict = xmltodict.parse(result)
     showsDict = data_dict["Schedule"]["Shows"]["Show"]
 
     # Print Finnkino data for analysis:
@@ -198,8 +239,8 @@ def load_kinotfi(day_offset):
 
 def load_all(day_offset:int=1):
     dataarray =  []
-    #dataarray =  load_biorex(day_offset=day_offset)
-    #dataarray += load_kinotfi(day_offset=day_offset)
+    # dataarray =  load_biorex(day_offset=day_offset)
+    # dataarray += load_kinotfi(day_offset=day_offset)
     dataarray += load_finnkino(day_offset=day_offset)
     return dataarray
 

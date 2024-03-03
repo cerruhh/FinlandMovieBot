@@ -143,15 +143,15 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
     if fetchedData["status"]!=404:
         # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
         try:
-
+            print(fetchedData)
             if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "NA":
                 fetchedData["audience_score"] = "NA"
                 fetchedData["tomatometer"] = "NA"
                 fetchedData["status"] = 404
-        except(KeyError):
+        except KeyError:
             print(f" Key Error!!! returnMovieDetails {fetchedData}")
-            temp = str(fetchedData["year"])
-            print(f"fetchedData - {movienametest} - {temp} - {movieyearFinnKino}")
+            # temp = str(fetchedData["year"])
+            # print(f"fetchedData - {movienametest} - {temp} - {movieyearFinnKino}")
             return {}
 
     return fetchedData
