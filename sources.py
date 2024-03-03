@@ -90,7 +90,7 @@ def load_finnkino(day_offset:int,give_all:bool=False):
 
     requestXML = BeautifulSoup(html, "xml")
     long_result = (requestXML.text)
-    print(long_result)
+    #    print(long_result)
     target = "<Schedule xmlns:xsd" # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
     index = long_result.find(target)
     result =  long_result[index:]
@@ -239,8 +239,8 @@ def load_kinotfi(day_offset):
 
 def load_all(day_offset:int=1):
     dataarray =  []
-    # dataarray =  load_biorex(day_offset=day_offset)
-    # dataarray += load_kinotfi(day_offset=day_offset)
+    dataarray =  load_biorex(day_offset=day_offset)
+    dataarray += load_kinotfi(day_offset=day_offset)
     dataarray += load_finnkino(day_offset=day_offset)
     return dataarray
 

@@ -12,7 +12,7 @@ import emailfunc
 #MovieUpdateFunction()
 Enabled=True
 DAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
-SEND_MAIL=True
+SEND_MAIL=False
 if Enabled==False:
 
     exit(6)
@@ -28,6 +28,7 @@ class NainDeStainError(Exception):
     pass
 
 def ExtractTime(time:str):
+    """ extract time from source string, time is only relevant if there are more than 10 chaarcters"""
     #print(time[11:16])
     if len(time) < 15:
         return "NA"
@@ -40,9 +41,8 @@ def ExtractDate(time:str):
     else:
         return time[0:10]
 
-def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,moviename:str,movieyear:str="2023"):
-    if __name__!="__main__":
-        raise NainDeStainError
+def fetch_data(*,update:bool=False,json_cache:str,url:str,moviename:str,movieyear:str="2023"):
+
 
     if update:
         json_data=None
@@ -135,16 +135,19 @@ def fetch_data(*,update:bool=False,json_cache:str="Data/tomato.json",url:str,mov
 #
 # def searchTomatoAudienceScore(movienName:str, year:int):
 #     return
-def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
-    """Returns all data from a film from tomatometer (if found)"""
-    if __name__=="__main__":
-        fetchedData:dict =fetch_data(update=False, json_cache=abspath("Data/tomato.json"),url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/",moviename=movienametest,movieyear=movieyearFinnKino)
+def returnMovieDetails(movienametest:str, movieyearFinnKino:str):
+    """Returns all data from a film from tomatometer (if found)
+    :rtype: object
+    """
+
+    fetchedData:dict =fetch_data(update=False, json_cache=abspath("Data/tomato.json"),url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/",moviename=movienametest,movieyear=movieyearFinnKino)
     #print(fetchedData)
     if fetchedData["status"]!=404:
         # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
         try:
-            print(fetchedData)
+            #print(fetchedData)
             if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "NA":
+                print( f"mismatch between movieyear FinnKino: {movieyearFinnKino}  and Tomato: {fetchedData['year']}")
                 fetchedData["audience_score"] = "NA"
                 fetchedData["tomatometer"] = "NA"
                 fetchedData["status"] = 404
@@ -157,87 +160,84 @@ def returnMovieDetals(movienametest:str,movieyearFinnKino:str):
     return fetchedData
 
 
-
 #fetchedData:dict =fetch_data(update=False, json_cache="Data/tomato.json",url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/{movienametest}",moviename=movienametest,movieyear="2023")
 
-
-
-
 #MAIN
+if __name__ == "__main__":
 
-showsDict=sources.load_all(DAYOFFSET)
+    showsDict=sources.load_all(DAYOFFSET)
 
+    #first data-row, does not contain relevant data
+    dataframe=pd.DataFrame(data={
+            "ShowStart": "-",
+            "ShowEnd": "-",
+            "ShowTitle": "-",
+            "Theatre": "-",
+            "Auditorium": "-",
+            "PresentationMethod": "-",
+            "ShowDate": "-",
+            "ProductionYear": "-",
+            "AudienceScore": "-",
+            "TomatoScore": "-",
+    },index=[False])
 
-#first data-row, does not contain relevant data
-dataframe=pd.DataFrame(data={
-        "ShowStart": "-",
-        "ShowEnd": "-",
-        "ShowTitle": "-",
-        "Theatre": "-",
-        "Auditorium": "-",
-        "PresentationMethod": "-",
-        "ShowDate": "-",
-        "ProductionYear": "-",
-        "AudienceScore": "-",
-        "TomatoScore": "-",
-},index=[False])
+    #df.set_index('ID', inplace=True)
+    counter = 0
+    for show in showsDict:
+        counter += 1
 
-#df.set_index('ID', inplace=True)
-counter = 0
-for show in showsDict:
-    counter += 1
+        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
+        if tomatoObjectN1 != {}:
+            show["audience_score"]=tomatoObjectN1["audience_score"]
+            show["tomatometer"]=tomatoObjectN1["tomatometer"]
+            movie_class=MovieClass(show)
+            dataframe.loc[len(dataframe)] =movie_class.datasample
+        else:
 
-    tomatoObjectN1 = returnMovieDetals(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
-    if tomatoObjectN1 != {}:
-        show["audience_score"]=tomatoObjectN1["audience_score"]
-        show["tomatometer"]=tomatoObjectN1["tomatometer"]
-        movie_class=MovieClass(show)
-        dataframe.loc[len(dataframe)] =movie_class.datasample
-    else:
-        show["audience_score"]="NA"
-        show["tomatometer"]="NA"
-        movie_class=MovieClass(show)
-        dataframe.loc[len(dataframe)] =movie_class.datasample
-
-
-# print all to output file
-dataframe = dataframe.reset_index()
-dataframe = dataframe.sort_values(by=["ShowStart"])
-dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
-#encoding="UTF-8"
-dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
-
-with open(file=abspath("Data/output.txt"),mode="w",encoding="UTF-8") as file:
-    file.truncate(0)
-
-with open(file=abspath("Data/output.txt"),mode="a",encoding="UTF-8") as txtfile:
-    counter=0
-    for sn in dataframe.iterrows():
-        if counter==0:
-            counter=1
-            continue
-        Name=sn[1].iloc[3]
-        ProdYear=sn[1].iloc[8]
-        Tomato=sn[1].iloc[10]
-        AudienceScore=sn[1].iloc[9]
-        ShowStart=sn[1].iloc[1]
-        ShowEnd=sn[1].iloc[2]
-        Audo=sn[1].iloc[4]
-        PresMethod=sn[1].iloc[6]
-        #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
-        #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod
-        txtfile.write(f"Movie: {Name} ({ProdYear}) - {Tomato}% + {AudienceScore}% -- {ShowStart}-{ShowEnd} - {Audo}, {PresMethod} \n")
+            show["audience_score"]="NA"
+            show["tomatometer"]="NA"
+            movie_class=MovieClass(show)
+            dataframe.loc[len(dataframe)] =movie_class.datasample
 
 
+    # print all to output file
+    dataframe = dataframe.reset_index()
+    dataframe = dataframe.sort_values(by=["ShowStart"])
+    dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
+    #encoding="UTF-8"
+    dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
 
-# con.send_message(msg)
-FILE_LIST=[
-    "Data/output.csv",
-    "Data/output.txt",
-    "Data/output.xlsx",
-    # "Data/tomato.json",
-    # "Data/finnkino.json"
-]
-if SEND_MAIL and __name__=="__main__":
-    print("preparing sending files by email")
-    emailfunc.SendMail()
+    with open(file=abspath("Data/output.txt"),mode="w",encoding="UTF-8") as file:
+        file.truncate(0)
+
+    with open(file=abspath("Data/output.txt"),mode="a",encoding="UTF-8") as txtfile:
+        counter=0
+        for sn in dataframe.iterrows():
+            if counter==0:
+                counter=1
+                continue
+            Name=sn[1].iloc[3]
+            ProdYear=sn[1].iloc[8]
+            Tomato=sn[1].iloc[10]
+            AudienceScore=sn[1].iloc[9]
+            ShowStart=sn[1].iloc[1]
+            ShowEnd=sn[1].iloc[2]
+            Audo=sn[1].iloc[4]
+            PresMethod=sn[1].iloc[6]
+            #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
+            #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod
+            txtfile.write(f"Movie: {Name} ({ProdYear}) - {Tomato}% + {AudienceScore}% -- {ShowStart}-{ShowEnd} - {Audo}, {PresMethod} \n")
+
+
+
+    # con.send_message(msg)
+    FILE_LIST=[
+        "Data/output.csv",
+        "Data/output.txt",
+        "Data/output.xlsx",
+        # "Data/tomato.json",
+        # "Data/finnkino.json"
+    ]
+    if SEND_MAIL and __name__=="__main__":
+        print("preparing sending files by email")
+        emailfunc.SendMail()
