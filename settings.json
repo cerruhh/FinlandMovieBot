@@ -1,0 +1,9 @@
+{
+  "ratings_enabled": false,
+  "send_mail": true,
+  "sources": {
+    "finnkino": true,
+    "biorex": true,
+    "kinot.fi": true
+  }
+}

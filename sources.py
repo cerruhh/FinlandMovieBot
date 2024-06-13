@@ -17,7 +17,9 @@ import requests
 import datetime as dt
 from time import sleep as wait
 from bs4 import BeautifulSoup
+from settings_get import read_settings
 
+all_settings=read_settings()
 
 def calcDate(offset:int):
     """
@@ -239,9 +241,13 @@ def load_kinotfi(day_offset):
 
 def load_all(day_offset:int=1):
     dataarray =  []
-    dataarray =  load_biorex(day_offset=day_offset)
-    dataarray += load_kinotfi(day_offset=day_offset)
-    dataarray += load_finnkino(day_offset=day_offset)
+    all_sources=all_settings["sources"]
+    if "biorex" in all_sources:
+        dataarray =  load_biorex(day_offset=day_offset)
+    if "kinot.fi" in all_sources:
+        dataarray += load_kinotfi(day_offset=day_offset)
+    if "finnkino" in all_sources:
+        dataarray += load_finnkino(day_offset=day_offset)
     return dataarray
 
 

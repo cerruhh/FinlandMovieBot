@@ -4,17 +4,25 @@ import pandas as pd
 import json
 import html
 from os.path import abspath
+from os.path import exists as file_exsits
+from rotten_tomatoes_client import RottenTomatoesClient
 
 from MovieClass import MovieClass
 import sources
 import emailfunc
+import colorama
+from settings_get import read_settings
+
+
+
+
+all_settings=read_settings()
 #from update_json import MovieUpdateFunction
 #MovieUpdateFunction()
 Enabled=True
 DAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
-SEND_MAIL=False
-if Enabled==False:
-
+SEND_MAIL=all_settings["send_mail"]
+if not Enabled:
     exit(6)
 
 now_Date=dt.datetime.now()
@@ -135,19 +143,21 @@ def fetch_data(*,update:bool=False,json_cache:str,url:str,moviename:str,movieyea
 #
 # def searchTomatoAudienceScore(movienName:str, year:int):
 #     return
-def returnMovieDetails(movienametest:str, movieyearFinnKino:str):
+def returnMovieDetails(movienametest:str, movieyearFinnKino:str,path:str="Data/tomato.json"):
     """Returns all data from a film from tomatometer (if found)
     :rtype: object
     """
-
-    fetchedData:dict =fetch_data(update=False, json_cache=abspath("Data/tomato.json"),url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/",moviename=movienametest,movieyear=movieyearFinnKino)
+    rotten_link="pip install rotten_tomatoes_client"
+    #fetchedData:dict=fetch_data(update=False, json_cache=path,url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/",moviename=movienametest,movieyear=movieyearFinnKino)'
+    fetchedData=RottenTomatoesClient.search(term=movienametest,limit=1)
+    
     #print(fetchedData)
     if fetchedData["status"]!=404:
         # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
         try:
             #print(fetchedData)
             if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "NA":
-                print( f"mismatch between movieyear FinnKino: {movieyearFinnKino}  and Tomato: {fetchedData['year']}")
+                print(f"mismatch between movieyear FinnKino: {movieyearFinnKino}  and Tomato: {fetchedData['year']}")
                 fetchedData["audience_score"] = "NA"
                 fetchedData["tomatometer"] = "NA"
                 fetchedData["status"] = 404
@@ -185,9 +195,12 @@ if __name__ == "__main__":
     counter = 0
     for show in showsDict:
         counter += 1
+        tomatoObjectN1={}
+        if all_settings["ratings_enabled"]:
+            tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
 
-        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
-        if tomatoObjectN1 != {}:
+
+        if tomatoObjectN1 != {} and all_settings["ratings_enabled"]:
             show["audience_score"]=tomatoObjectN1["audience_score"]
             show["tomatometer"]=tomatoObjectN1["tomatometer"]
             movie_class=MovieClass(show)
