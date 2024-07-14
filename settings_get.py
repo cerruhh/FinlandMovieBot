@@ -7,7 +7,7 @@ def read_settings():
     get all settings from settings.json
     :return:
     """
-    setting_returable=None
+    setting_returnable=None
     if not file_exsits("settings.json"):
         with open("settings.json",mode="w+") as settings_file:
             json.dump({
@@ -21,7 +21,7 @@ def read_settings():
             },settings_file,indent=2)
     else:
         with open("settings.json",mode="r") as settings_file:
-            setting_returable = json.load(settings_file)
+            setting_returnable = json.load(settings_file)
 
     # with open("settings.json",mode="ac"):
     #     pass
@@ -36,4 +36,4 @@ def read_settings():
 
             print(colorama.Fore.RED+"secrets file not defined, please fill in secrets.json")
             exit(2)
-    return setting_returable
+    return setting_returnable

@@ -50,7 +50,7 @@ def normalizeTitle(title: str):
     function that will remove some words from any text
     """
 
-    removeWords=("BARNSÖNDAGAR: ","mörkömanvandestaatfilmmetergewoorden.")
+    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
         return title
@@ -242,12 +242,18 @@ def load_kinotfi(day_offset):
 def load_all(day_offset:int=1):
     dataarray =  []
     all_sources=all_settings["sources"]
-    if "biorex" in all_sources:
+    if all_sources["biorex"] :
         dataarray =  load_biorex(day_offset=day_offset)
-    if "kinot.fi" in all_sources:
+    else:
+        print("biorex search is disabled in settings.json")
+    if all_sources["kinot.fi"] :
         dataarray += load_kinotfi(day_offset=day_offset)
-    if "finnkino" in all_sources:
+    else:
+        print("kinot.fi search is disabled in settings.json")
+    if all_sources["finnkino"]:
         dataarray += load_finnkino(day_offset=day_offset)
+    else:
+        print("finnkino search is disabled in settings.json")
     return dataarray
 
 

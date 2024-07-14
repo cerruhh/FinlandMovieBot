@@ -3,18 +3,17 @@ import datetime as dt
 import pandas as pd
 import json
 import html
+import re
+
+from bs4 import BeautifulSoup
 from os.path import abspath
 from os.path import exists as file_exsits
-from rotten_tomatoes_client import RottenTomatoesClient
 
 from MovieClass import MovieClass
 import sources
 import emailfunc
 import colorama
 from settings_get import read_settings
-
-
-
 
 all_settings=read_settings()
 #from update_json import MovieUpdateFunction
@@ -49,35 +48,174 @@ def ExtractDate(time:str):
     else:
         return time[0:10]
 
-def fetch_data(*,update:bool=False,json_cache:str,url:str,moviename:str,movieyear:str="2023"):
+
+def clean_string(s):
+    # Convert to lowercase
+    s = s.lower()
+    # Remove spaces and punctuation
+    s = re.sub(r'[^\\w\\s]', '', s).replace(' ', '')
+    return s
+
+def compare_strings(s1, s2):
+    # Clean both strings
+    cleaned_s1 = clean_string(s1)
+    cleaned_s2 = clean_string(s2)
+
+    # Compare the cleaned strings
+    return cleaned_s1 == cleaned_s2
+
+def lookup_movie_score_tm(movie_title):
+    """ lookup argument: movie title
+    returns dictionary that contains tomatometer score, the audience score, the movie title, the release year and the status"""
+    # Convert movie title to lowercase and replace spaces with underscores
+    search_term = movie_title.lower().replace(" ", "_")
+
+    # Create the search URL
+    search_url = f"https://www.rottentomatoes.com/search?search={search_term}"
+
+    # Send a GET request to the search URL
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.content, 'html.parser')
 
 
+    no_results_tag = soup.find('div', class_='search__no-results-copy-group')
+    #print(f"no results tag: {no_results_tag}" )
+    #print(f"no results tag bool: {bool(no_results_tag)}")
+    if bool(no_results_tag):
+        # no results
+        return {"tomatometer": "NA", "audience_score": "NA", "release_year": "NA", "tm_title": "NA", "status": 404}
+
+    # Find the first movie link after the "Movies" section
+    movie_link = soup.find("h2", {"slot": "title", "data-qa": "search-result-title"}).find_next("a")["href"]
+
+    # Create the full movie URL
+    movie_url = f"{movie_link}"
+    print(movie_url)
+    # Send a GET request to the movie URL
+    movie_response = requests.get(movie_url)
+    movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
+
+    # Send a GET request to the movie URL
+    movie_response = requests.get(movie_url)
+    movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
+
+    # Find the movie title
+    tm_title = movie_soup.find('h1', {'slot': 'titleIntro'}).find('span').text
+
+    # Find the tomato score and the audience score
+    critic_score_element = movie_soup.find("rt-button", {"slot": "criticsScore"})
+    critic_score = critic_score_element.find("rt-text").text
+    # print(f"tomatometer: {critic_score}")
+    audience_score_element = movie_soup.find("rt-button", {"slot": "audienceScore"})
+    audience_score = audience_score_element.find("rt-text").text
+    # print(f"audience score: {audience_score}")
+    # Find the release date element
+
+    release_date_element = movie_soup.find( string='Release Date (Theaters)')
+    # print((release_date_element))
+    if release_date_element:
+        # Get the next sibling (which contains the release date)
+        release_date_text = release_date_element.find_next('dd').text.strip()
+        # print(release_date_text)
+        # Extract the release year
+        release_year = release_date_text.split(',')[1].strip()
+        # print(f"Release year: {release_year}")
+
+        release_year = release_date_text.split(',')[1].strip()
+    else:
+        release_year = 9999
+    # Extract the release year
+
+    return {"tomatometer": critic_score, "audience_score": audience_score, "release_year": release_year, "tm_title":tm_title, "status":200}
+
+
+def purge_old_items(json_cache:str, days=30):
+    """
+    Purges items from the data dictionary that have an "updated" value older than the specified number of days.
+
+    Args:
+        json_cache (str): The json file with the data
+        days (int): Number of days to consider as "old". Default is 30.
+
+    Returns:
+        empty: the json_cache is updated
+    """
+    with open(file=json_cache, mode="r+", encoding="UTF-8") as file:
+        data = json.load(file)  # load the whole json file into dictionary "data"
+
+    # Get the current date
+    current_date = dt.datetime.now()
+    items_to_remove = []
+
+    # Iterate over the data dictionary and collect movies to remove
+    for movie in data.items():
+        movie_details = movie[1] # item[0] is the movie name, item[1] has the movie details
+        #print(movie_details["updated"])
+        # Parse the "updated" value as a datetime object
+        updated_date = dt.datetime.strptime(movie_details["updated"], "%Y-%m-%d %H:%M:%S.%f")
+        #print(f"updated_date: {updated_date}")
+        # Calculate the difference between current date and updated date
+        days_difference = (current_date - updated_date).days
+        #print(f"days difference: {days_difference}")
+        # If the difference is greater than the specified days, mark the item for removal
+        if days_difference > days:
+            items_to_remove.append(movie[0])
+            #print(f"movie to remove: {movie[0]}")
+        # Remove the marked items
+    print(f"# items in dictionary before purge: {len(data)}")
+    for movie in items_to_remove:
+        # print (movie)
+        data.pop(movie) #remove the movie from the dictionary
+    print(f"# items in dictionary after purge: {len(data)}")
+
+    # and write the full file back to the json
+    with open(file=json_cache, mode="w", encoding="UTF-8") as file:
+        json.dump(data, file, indent=3)
+
+    return
+
+def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2023"):
+    """ This function requires these
+        args:
+        update: set true to enforce update
+        json_cache: the name of the json file with the buffer information,
+        moviename: the movie name
+        movieyear: the movie year
+
+        return:
+        status: like 200,
+        audience_scor:e percentage
+        tomatometer: percentage
+        tm_title: tomatometer name of the movie
+        tm_year: tomatomet year of the movie
+        updated: when the movie was looked up
+        """
+
+    movietitle = html.unescape(moviename)
     if update:
+        # to enforce an update
         json_data=None
         print("json data Update true")
-    else:
+    else: #no update enforced
         try:
-            with open(file=json_cache,mode="r+") as file:
+            with open(file=json_cache,mode="r+") as file: #try opening json file
                 json_data=json.load(file)
                 #print(json_data["Movies"])
-                print(f"Cache:True, moviename: {html.unescape(moviename)}")
-        except(FileNotFoundError,json.JSONDecodeError) as errorMessage:
+                print(f"Cache:True, movietitle: {movietitle}")
+        except(FileNotFoundError,json.JSONDecodeError) as errorMessage: #if the json file with buffer is not found then
+            # create an emptie file
             with open(file=json_cache,mode="r+",encoding="UTF-8",newline=None) as json_file:
-                json.dump({
-                    "Movies":{
-
-                    }
-                },file)
+                json.dump({},file)
             json_data=None
         if json_data!=None:
-            try:
-                jsonresponse = json_data["Movies"][html.unescape(moviename)]
+            try: # try and find the movie name from the buffer file
+                jsonresponse = json_data[movietitle]
 
             except(IndexError,KeyError):
                 #print("Cache: not found movie in cache")
                 json_data=None
 
-            else: #If no exception
+            else: #If no movie found in the buffer
 
                 jsondate  = dt.datetime.strptime(ExtractDate(jsonresponse["updated"]), "%Y-%m-%d")
                 thirtyDaysAgo = dt.datetime.now() - dt.timedelta(days=30)
@@ -88,49 +226,43 @@ def fetch_data(*,update:bool=False,json_cache:str,url:str,moviename:str,movieyea
                 else:
                     return jsonresponse   #tomato object returned from cache (and is uptodate)
 
-######### nothing found in the cache, now check API ################################
+######### nothing found in the cache, now check rotten tomato website ################################
         now = str(dt.datetime.now())
-        if json_data==None or json_data["Movies"]=={}: # or dateinjson < thirtyDaysAgo
-            url=f"{url}{moviename}"
-            print("Cache not found: now searching via API: " + url)
-            JSD=requests.get(url=url)
+        if json_data==None or json_data=={}: # or dateinjson < thirtyDaysAgo
+            url=f"{movietitle}"
 
-            if (str(JSD)== "<Response [500]>"):
-#                print("404:could not find movie on tomatometer.")
-                movieFound = False
+            if all_settings["ratings_enabled"]:
+                print("Cache not found: now searching Rotten Tomato: " + movietitle)
+                movie_dict=lookup_movie_score_tm(movietitle) #actual lookup
             else:
-                movieFound = True
-                json_data = JSD.json()
-                # print(JSD.json())
+                print("Cache not found, but not doing website lookup as ratings_enabled: False in settings.json")
+                return
 
             with open(file=json_cache,mode="r+",encoding="UTF-8") as file:
-                jsd=json.load(file)
+                jsd=json.load(file) #load the whole file into jsd
 
-            if movieFound:
-                #json_data["status"]=200
-                json_data["status"]=200
-                json_data["updated"]=now
-                jsd["Movies"][html.unescape(moviename)] = json_data
+            #now add the new movie
+            jsd[movietitle]={
+                "status":200,
+                "audience_score":movie_dict["audience_score"],
+                "tomatometer":movie_dict["tomatometer"],
+                "tm_title": movie_dict["tm_title"],
+                "tm_year": movie_dict["release_year"],
+                "updated":now
+            }
 
-            else:
-                # print(jsd)
-                jsd["Movies"][html.unescape(moviename)]={
-                    "status":404,
-                    "audience_score":"NA",
-                    "tomatometer":"NA",
-                    "updated":now
-                }
-
+            #and write the full file back to the json
             with open(file=json_cache, mode="w", encoding="UTF-8") as file:
                 json.dump(jsd,file,indent=3)
 
             #print(f"Cache: False, moviename: {moviename}, IsMovieFound: {movieFound}")
-            if movieFound:
-                return jsd["Movies"][html.unescape(moviename)]
+            if True:
+                return jsd[movietitle]
     #if not json_data[moviename]:
     #print(json_data)
     #print("JsonDataBottm")
     #print(json_data)
+    # something funny happened and we send this back
     return {
         "status":404,
         "audience_score":"NA",
@@ -138,44 +270,38 @@ def fetch_data(*,update:bool=False,json_cache:str,url:str,moviename:str,movieyea
     }
 
 
-# def searchTomatoMeterScore(movienName:str, year:int):
-#     return
-#
-# def searchTomatoAudienceScore(movienName:str, year:int):
-#     return
+
 def returnMovieDetails(movienametest:str, movieyearFinnKino:str,path:str="Data/tomato.json"):
     """Returns all data from a film from tomatometer (if found)
-    :rtype: object
+    args:
+        moviename: string
+        movieyearFinnKino: string, used to check if the movie queried is the same as the movie result
+        path: location to the json file that is used as buffer
+    returns: dictionary with
+        'status': 200
+        'audience_score': '95%',
+        'tomatometer': '92%',
+        'tm_title': 'Dune: Part Two',
+        'tm_year': '2024',
+        'updated': '2024-07-13 21:05:02.218696'
     """
-    rotten_link="pip install rotten_tomatoes_client"
-    #fetchedData:dict=fetch_data(update=False, json_cache=path,url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/",moviename=movienametest,movieyear=movieyearFinnKino)'
-    fetchedData=RottenTomatoesClient.search(term=movienametest,limit=1)
-    
-    #print(fetchedData)
-    if fetchedData["status"]!=404:
-        # print(f'ftchdata {fetchedData["year"]},movieyear Finnkino: {movieyearFinnKino}')
-        try:
-            #print(fetchedData)
-            if str(fetchedData["year"]) != movieyearFinnKino and movieyearFinnKino != "NA":
-                print(f"mismatch between movieyear FinnKino: {movieyearFinnKino}  and Tomato: {fetchedData['year']}")
-                fetchedData["audience_score"] = "NA"
-                fetchedData["tomatometer"] = "NA"
-                fetchedData["status"] = 404
-        except KeyError:
-            print(f" Key Error!!! returnMovieDetails {fetchedData}")
-            # temp = str(fetchedData["year"])
-            # print(f"fetchedData - {movienametest} - {temp} - {movieyearFinnKino}")
-            return {}
 
-    return fetchedData
+    fetchedData:dict=fetch_data(update=False, json_cache=path,moviename=movienametest,movieyear=movieyearFinnKino)
+    if (fetchedData == None):
+        return
+    else:
+        if compare_strings(movienametest, fetchedData['tm_title']):
+            fetchedData['tm_title'] = "match ok"
+        else:
+            print (f"moviename is not matching with TM result: {movienametest} and {fetchedData['tm_title']}")
+        return fetchedData
 
 
-#fetchedData:dict =fetch_data(update=False, json_cache="Data/tomato.json",url=f"https://rotten-tomatoes-api.ue.r.appspot.com/movie/{movienametest}",moviename=movienametest,movieyear="2023")
 
 #MAIN
 if __name__ == "__main__":
 
-    showsDict=sources.load_all(DAYOFFSET)
+    showsDict=sources.load_all(DAYOFFSET) #loads all the source data from the different theater websites
 
     #first data-row, does not contain relevant data
     dataframe=pd.DataFrame(data={
@@ -187,6 +313,7 @@ if __name__ == "__main__":
             "PresentationMethod": "-",
             "ShowDate": "-",
             "ProductionYear": "-",
+            "TomatoTitle": "-",
             "AudienceScore": "-",
             "TomatoScore": "-",
     },index=[False])
@@ -196,22 +323,28 @@ if __name__ == "__main__":
     for show in showsDict:
         counter += 1
         tomatoObjectN1={}
-        if all_settings["ratings_enabled"]:
-            tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]))
+        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]), path="Data/tomato.json")
 
-
-        if tomatoObjectN1 != {} and all_settings["ratings_enabled"]:
+        if tomatoObjectN1 != {} and tomatoObjectN1 != None:
             show["audience_score"]=tomatoObjectN1["audience_score"]
             show["tomatometer"]=tomatoObjectN1["tomatometer"]
+            show["tm_title"] = tomatoObjectN1["tm_title"]
             movie_class=MovieClass(show)
+            # example of show
+            # show: {'OriginalTitle': 'A Quiet Place:\xa0Day One', 'TheatreAuditorium': '3 REX',
+            # 'dttmShowStart': '2024-07-14T21:00:00', 'Theatre': 'BioRex Kulttuurikasarmi', 'ProductionYear': 'NA',
+            # 'dttmShowEnd': 'NA', 'PresentationMethod': 'NA', 'audience_score': '73%', 'tomatometer': '87%',
+            # 'tm_title': 'A Quiet Place: Day One'}
+
+            #print(f"movie class: {movie_class}")
             dataframe.loc[len(dataframe)] =movie_class.datasample
         else:
-
-            show["audience_score"]="NA"
-            show["tomatometer"]="NA"
-            movie_class=MovieClass(show)
-            dataframe.loc[len(dataframe)] =movie_class.datasample
-
+            if tomatoObjectN1 == {} :
+                show["audience_score"]="NA"
+                show["tomatometer"]="NA"
+                movie_class=MovieClass(show)
+                dataframe.loc[len(dataframe)] =movie_class.datasample
+        # print(f"tomato object: {tomatoObjectN1}")
 
     # print all to output file
     dataframe = dataframe.reset_index()
@@ -229,19 +362,21 @@ if __name__ == "__main__":
             if counter==0:
                 counter=1
                 continue
-            Name=sn[1].iloc[3]
-            ProdYear=sn[1].iloc[8]
-            Tomato=sn[1].iloc[10]
-            AudienceScore=sn[1].iloc[9]
-            ShowStart=sn[1].iloc[1]
-            ShowEnd=sn[1].iloc[2]
-            Audo=sn[1].iloc[4]
-            PresMethod=sn[1].iloc[6]
+            ShowStart = sn[1].iloc[1]  # start time of show
+            ShowEnd = sn[1].iloc[2]  # end time of show, only works for Finnkino
+            Name=sn[1].iloc[3] # movietitle
+            Theatername=sn[1].iloc[4] # theater where movie shows
+            # 5 is the movie room
+            PresMethod = sn[1].iloc[6]  # if move is 2D or 3D
+            # 7 is the date of the movie
+            ProdYear=sn[1].iloc[8] #production year of movie from Finnkino data
+            # 9 is the movie title as returned by rotten tomato website
+            Tomato=sn[1].iloc[11]  # tomatoscore
+            AudienceScore=sn[1].iloc[10] # audience score rottentomato
+
             #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
             #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod
-            txtfile.write(f"Movie: {Name} ({ProdYear}) - {Tomato}% + {AudienceScore}% -- {ShowStart}-{ShowEnd} - {Audo}, {PresMethod} \n")
-
-
+            txtfile.write(f"Movie: {Name} ({ProdYear}) - {Tomato} + {AudienceScore} -- {ShowStart}-{ShowEnd} - {Theatername}, {PresMethod} \n")
 
     # con.send_message(msg)
     FILE_LIST=[
