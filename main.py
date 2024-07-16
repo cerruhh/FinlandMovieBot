@@ -18,9 +18,12 @@ from settings_get import read_settings
 all_settings=read_settings()
 #from update_json import MovieUpdateFunction
 #MovieUpdateFunction()
-Enabled=True
-DAYOFFSET = 1 # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
+
+
+DAYOFFSET = all_settings["days_offset"] # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
 SEND_MAIL=all_settings["send_mail"]
+
+Enabled=True
 if not Enabled:
     exit(6)
 
@@ -313,6 +316,7 @@ if __name__ == "__main__":
             "PresentationMethod": "-",
             "ShowDate": "-",
             "ProductionYear": "-",
+            "TomatoYear": "-",
             "TomatoTitle": "-",
             "AudienceScore": "-",
             "TomatoScore": "-",
@@ -329,6 +333,7 @@ if __name__ == "__main__":
             show["audience_score"]=tomatoObjectN1["audience_score"]
             show["tomatometer"]=tomatoObjectN1["tomatometer"]
             show["tm_title"] = tomatoObjectN1["tm_title"]
+            show["tm_year"] = tomatoObjectN1["tm_year"]
             movie_class=MovieClass(show)
             # example of show
             # show: {'OriginalTitle': 'A Quiet Place:\xa0Day One', 'TheatreAuditorium': '3 REX',
@@ -368,11 +373,13 @@ if __name__ == "__main__":
             Theatername=sn[1].iloc[4] # theater where movie shows
             # 5 is the movie room
             PresMethod = sn[1].iloc[6]  # if move is 2D or 3D
-            # 7 is the date of the movie
-            ProdYear=sn[1].iloc[8] #production year of movie from Finnkino data
-            # 9 is the movie title as returned by rotten tomato website
-            Tomato=sn[1].iloc[11]  # tomatoscore
-            AudienceScore=sn[1].iloc[10] # audience score rottentomato
+            # 7 is the date that the movie is displayed in the theater
+            #8 is the production year in the FInnkino theater data
+            ProdYear=sn[1].iloc[9] #production year according to tomato website
+            # 10 is the movie title as returned by rotten tomato website if different from the movietitle
+            AudienceScore = sn[1].iloc[11]  # audience score rottentomato
+            Tomato=sn[1].iloc[12]  # tomatoscore
+
 
             #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
             #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod

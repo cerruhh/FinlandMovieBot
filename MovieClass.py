@@ -74,6 +74,11 @@ class MovieClass:
         else:
             self.tomato_meter = "NA"
 
+        if ("tm_year" in showdict):
+            self.tm_year=showdict["tm_year"]
+        else:
+            self.tm_year = "NA"
+
         if ("tm_title" in showdict):
             self.tm_title=showdict["tm_title"]
         else:
@@ -88,6 +93,7 @@ class MovieClass:
             "PresentationMethod": self.PressMethod,
             "ShowDate": self.ShowDate,
             "ProductionYear": self.ShowCreationDate,
+            "TomatoYear": self.tm_year,
             "TomatoTitle": self.tm_title,
             "AudienceScore": self.audience_score,
             "TomatoScore": self.tomato_meter,
