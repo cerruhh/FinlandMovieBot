@@ -6,7 +6,12 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import datetime
 import json
-searchString=(datetime.datetime.now()+datetime.timedelta(1)).strftime("%d.%m.%Y")
+from settings_get import read_settings
+
+all_settings=read_settings()
+DAYOFFSET = all_settings["days_offset"] # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
+
+searchString=(datetime.datetime.now()+datetime.timedelta(DAYOFFSET)).strftime("%d.%m.%Y")
 def returnUserData():
     with open(file="secrets.json",encoding="UTF-8",mode="r+",newline=None) as file:
         try:

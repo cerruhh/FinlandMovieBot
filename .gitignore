@@ -1,6 +1,7 @@
 Data/
 .idea
 secrets.json
+othertest.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -295,15 +295,15 @@ def returnMovieDetails(movienametest:str, movieyearFinnKino:str,path:str="Data/t
     else:
         if compare_strings(movienametest, fetchedData['tm_title']):
             fetchedData['tm_title'] = "match ok"
-        else:
-            print (f"moviename is not matching with TM result: {movienametest} and {fetchedData['tm_title']}")
+        #else:
+            #print (f"moviename is not matching with TM result: {movienametest} and {fetchedData['tm_title']}")
         return fetchedData
 
 
 
 #MAIN
 if __name__ == "__main__":
-
+    purge_old_items("Data/tomato.json", 30)  # purge the oldest items from the buffer
     showsDict=sources.load_all(DAYOFFSET) #loads all the source data from the different theater websites
 
     #first data-row, does not contain relevant data

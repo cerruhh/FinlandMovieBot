@@ -53,7 +53,7 @@ def normalizeTitle(title: str):
     removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
-        return title
+    return title
 
 
 def convertOneDigit2Two(digit:str):
@@ -61,6 +61,7 @@ def convertOneDigit2Two(digit:str):
         return f"0{digit}"
     else:
         return digit[:2]
+
 
 def load_finnkino(day_offset:int,give_all:bool=False):
     # hdr = {
@@ -95,8 +96,11 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     #    print(long_result)
     target = "<Schedule xmlns:xsd" # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
     index = long_result.find(target)
-    result =  long_result[index:]
 
+    result =  long_result[index:]
+    if "&" in result:
+        result = result.replace("&", "&#38;") ## xmltodict cannot handle "&"
+    #print(result)
     #requestXML.encoding = "UTF-8"
     #requestXML.raise_for_status()
 
