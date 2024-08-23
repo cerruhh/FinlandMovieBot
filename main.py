@@ -1,3 +1,5 @@
+from openpyxl import load_workbook
+import colorama
 import requests
 import datetime as dt
 import pandas as pd
@@ -354,7 +356,58 @@ if __name__ == "__main__":
     # print all to output file
     dataframe = dataframe.reset_index()
     dataframe = dataframe.sort_values(by=["ShowStart"])
-    dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
+
+    # make list of all movies in output_movies.xlsx
+    new_dataframe = dataframe.loc[:, ['ShowTitle', 'AudienceScore', 'TomatoScore']]
+    new_dataframe=new_dataframe.drop(index=0)
+
+    # change all "NA" and "" values to None
+    new_dataframe = new_dataframe.replace({'NA': None, '': None})
+
+    # Drop all None Values from dataframe
+    new_dataframe = new_dataframe.dropna(subset=['AudienceScore', 'TomatoScore'])
+
+    # remove all duplicates from database
+    new_dataframe = new_dataframe.drop_duplicates()
+
+    new_dataframe['AudienceScore'] = new_dataframe['AudienceScore'].str.rstrip('%').astype('float') / 100.0
+    new_dataframe['TomatoScore'] = new_dataframe['TomatoScore'].str.rstrip('%').astype('float') / 100.0
+
+    # Adding a new column 'Average' that calculates the average of 'Percentage1' and 'Percentage2', rounding to .02 decimals
+
+    new_dataframe['Average'] = round(((new_dataframe['TomatoScore'] + new_dataframe['AudienceScore']) / 2),2)
+
+
+
+    # Converting the 'Average' back to percentage format
+    new_dataframe['Average'] = (new_dataframe['Average'] * 100).astype(str) + '%'
+
+    # Sort in descending order dataframe
+    new_dataframe = new_dataframe.sort_values(by='Average', ascending=False)
+
+
+    print(new_dataframe.head())
+
+
+    try:
+        dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
+    except PermissionError:
+        print(colorama.Fore.YELLOW + "Please close Excel and try again.")
+
+    filename = "Data/output.xlsx"
+
+    existing_sheet = pd.read_excel(filename)
+
+    with pd.ExcelWriter(path=filename, engine='openpyxl', mode='a') as writer:
+        try:
+            new_dataframe.to_excel(writer, sheet_name='Sheet2', index=False, header=None)
+        except PermissionError:
+            print("Close the file in Excel and try again.")
+
+
+
+
+
     #encoding="UTF-8"
     dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
 
@@ -393,6 +446,7 @@ if __name__ == "__main__":
         # "Data/tomato.json",
         # "Data/finnkino.json"
     ]
+
     if SEND_MAIL and __name__=="__main__":
         print("preparing sending files by email")
         emailfunc.SendMail()
