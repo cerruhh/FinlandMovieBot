@@ -11,14 +11,15 @@ def read_settings():
     if not file_exsits("settings.json"):
         with open("settings.json",mode="w+") as settings_file:
             json.dump({
-                "ratings_enabled":True,
-                "days_offset":2,
-                "send_mail":True,
-                "sources":{
-                    "finnkino":True,
-                    "biorex":True,
-                    "kinot.fi":True
-                }
+              "test":True,
+              "ratings_enabled":True,
+              "days_offset": 1,
+              "send_mail":True,
+              "sources": {
+                "finnkino":True,
+                "biorex":True,
+                "kinot.fi":True
+              }
             },settings_file,indent=2)
     else:
         with open("settings.json",mode="r") as settings_file:

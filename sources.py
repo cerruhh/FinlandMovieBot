@@ -50,7 +50,7 @@ def normalizeTitle(title: str):
     function that will remove some words from any text
     """
 
-    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ")
+    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
     return title

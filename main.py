@@ -69,9 +69,15 @@ def compare_strings(s1, s2):
     # Compare the cleaned strings
     return cleaned_s1 == cleaned_s2
 
+def extract_number(s):
+    '''function is used to extract a number from the percentages used in the tomato scores'''
+    match = re.search(r'\d{1,3}', s)
+    return int(match.group()) if match else None
+
 def lookup_movie_score_tm(movie_title):
     """ lookup argument: movie title
-    returns dictionary that contains tomatometer score, the audience score, the movie title, the release year and the status"""
+    returns dictionary that contains tomatometer score, the audience score, the average score, the movie title as it is
+    on rottentomatoes.com, the release year, the status and the summary of the movie"""
     # Convert movie title to lowercase and replace spaces with underscores
     search_term = movie_title.lower().replace(" ", "_")
 
@@ -84,11 +90,11 @@ def lookup_movie_score_tm(movie_title):
 
 
     no_results_tag = soup.find('div', class_='search__no-results-copy-group')
-    #print(f"no results tag: {no_results_tag}" )
+    print(f"no results tag: {no_results_tag}" )
     #print(f"no results tag bool: {bool(no_results_tag)}")
     if bool(no_results_tag):
         # no results
-        return {"tomatometer": "NA", "audience_score": "NA", "release_year": "NA", "tm_title": "NA", "status": 404}
+        return {"tomatometer": "NA", "audience_score": "NA", "average": "NA", "release_year": "NA", "tm_title": "NA", "synopsis": "NA", "status": 404}
 
     # Find the first movie link after the "Movies" section
     movie_link = soup.find("h2", {"slot": "title", "data-qa": "search-result-title"}).find_next("a")["href"]
@@ -104,8 +110,10 @@ def lookup_movie_score_tm(movie_title):
     movie_response = requests.get(movie_url)
     movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
 
-    # Find the movie title
+    # Find the movie title and if it is similar to the movie_title then change it to "match ok"
     tm_title = movie_soup.find('h1', {'slot': 'titleIntro'}).find('span').text
+    if compare_strings(movienametest, tm_title):
+            tm_title = "match ok"
 
     # Find the tomato score and the audience score
     critic_score_element = movie_soup.find("rt-button", {"slot": "criticsScore"})
@@ -116,22 +124,35 @@ def lookup_movie_score_tm(movie_title):
     # print(f"audience score: {audience_score}")
     # Find the release date element
 
-    release_date_element = movie_soup.find( string='Release Date (Theaters)')
-    # print((release_date_element))
-    if release_date_element:
-        # Get the next sibling (which contains the release date)
-        release_date_text = release_date_element.find_next('dd').text.strip()
-        # print(release_date_text)
-        # Extract the release year
-        release_year = release_date_text.split(',')[1].strip()
-        # print(f"Release year: {release_year}")
-
-        release_year = release_date_text.split(',')[1].strip()
+    tomatometer_value = extract_number(critic_score)
+    audience_score_value = extract_number(audience_score)
+    if tomatometer_value is not None and audience_score_value is not None:
+        # Calculate the average
+        average_number = (tomatometer_value + audience_score_value) / 2
+        # Add the % symbol
+        average = f"{average_number:.1f}%"
+        print(f"tomatometer number: {tomatometer_value}, audience number: {audience_score_value}, average: {average_number}, average with percent: {average}")
     else:
-        release_year = 9999
-    # Extract the release year
+        average = None
 
-    return {"tomatometer": critic_score, "audience_score": audience_score, "release_year": release_year, "tm_title":tm_title, "status":200}
+    #release_date_element = movie_soup.find( string='Release Date (Theaters)')
+    release_date_element = movie_soup.find('rt-text', attrs={'slot': 'releaseDate'})
+    synopsis_div = movie_soup.find('div', class_='synopsis-wrap')
+
+    if synopsis_div:
+        # Extract the text from the synopsis div, excluding the "Synopsis" key
+        synopsis = synopsis_div.find('rt-text', class_=None).get_text(strip=True)
+        #print("Synopsis:")
+        #print(synopsis)
+    else:
+        synopsis = None
+
+    if release_date_element:
+        release_year = release_date_element.get_text(strip=True).replace(',', '')
+    else:
+        release_year = None
+
+    return {"tomatometer": critic_score, "audience_score": audience_score, "average": average, "release_year": release_year, "tm_title":tm_title, "status":200, "synopsis":synopsis}
 
 
 def purge_old_items(json_cache:str, days=30):
@@ -179,9 +200,40 @@ def purge_old_items(json_cache:str, days=30):
 
     return
 
+
+def conditional_purge(json_cache: str, key_to_check: str):
+    """
+    Purges items from the data dictionary where the specified key has a value of None.
+
+    Args:
+        json_cache (str): The path to the JSON file with the data.
+        key_to_check (str): The key to check for None values.
+
+    Returns:
+        None: The json_cache is updated.
+    """
+    with open(file=json_cache, mode="r+", encoding="UTF-8") as file:
+        data = json.load(file)  # Load the whole JSON file into dictionary "data"
+
+    # Collect items to remove
+    items_to_remove = [key for key, value in data.items() if value.get(key_to_check) is None]
+
+    # Remove the marked items
+    print(f"# items in dictionary before purge: {len(data)}")
+    for key in items_to_remove:
+        data.pop(key)  # Remove the item from the dictionary
+    print(f"# items in dictionary after purge: {len(data)}")
+
+    # Write the full file back to the JSON
+    with open(file=json_cache, mode="w", encoding="UTF-8") as file:
+        json.dump(data, file, indent=3)
+    return
+
+
 def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2023"):
-    """ This function requires these
-        args:
+    """ This function acts like a buffer, checking if the movie is already in the json file, if not it will trigger
+        a lookup.
+        This function requires these args:
         update: set true to enforce update
         json_cache: the name of the json file with the buffer information,
         moviename: the movie name
@@ -251,8 +303,10 @@ def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2
                 "status":200,
                 "audience_score":movie_dict["audience_score"],
                 "tomatometer":movie_dict["tomatometer"],
+                "average": movie_dict["average"],
                 "tm_title": movie_dict["tm_title"],
                 "tm_year": movie_dict["release_year"],
+                "synopsis": movie_dict["synopsis"],
                 "updated":now
             }
 
@@ -276,7 +330,7 @@ def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2
 
 
 
-def returnMovieDetails(movienametest:str, movieyearFinnKino:str,path:str="Data/tomato.json"):
+def returnMovieDetails(movienametest:str, path:str="Data/tomato.json"):
     """Returns all data from a film from tomatometer (if found)
     args:
         moviename: string
@@ -289,23 +343,21 @@ def returnMovieDetails(movienametest:str, movieyearFinnKino:str,path:str="Data/t
         'tm_title': 'Dune: Part Two',
         'tm_year': '2024',
         'updated': '2024-07-13 21:05:02.218696'
+        'synopsis': 'summary'
+        'average': 93.5%
     """
 
     fetchedData:dict=fetch_data(update=False, json_cache=path,moviename=movienametest,movieyear=movieyearFinnKino)
     if (fetchedData == None):
         return
     else:
-        if compare_strings(movienametest, fetchedData['tm_title']):
-            fetchedData['tm_title'] = "match ok"
-        #else:
-            #print (f"moviename is not matching with TM result: {movienametest} and {fetchedData['tm_title']}")
         return fetchedData
 
 
 
 #MAIN
 if __name__ == "__main__":
-    purge_old_items("Data/tomato.json", 30)  # purge the oldest items from the buffer
+    purge_old_items("Data/tomato.json", 30)  # purge the oldest items from the buffer, with value -1 all items are purged
     showsDict=sources.load_all(DAYOFFSET) #loads all the source data from the different theater websites
 
     #first data-row, does not contain relevant data
@@ -322,6 +374,8 @@ if __name__ == "__main__":
             "TomatoTitle": "-",
             "AudienceScore": "-",
             "TomatoScore": "-",
+            "Average": "-",
+            "Synopsis": "-",
     },index=[False])
 
     #df.set_index('ID', inplace=True)
@@ -336,6 +390,8 @@ if __name__ == "__main__":
             show["tomatometer"]=tomatoObjectN1["tomatometer"]
             show["tm_title"] = tomatoObjectN1["tm_title"]
             show["tm_year"] = tomatoObjectN1["tm_year"]
+            show["average"] = tomatoObjectN1["average"]
+            show["synopsis"] = tomatoObjectN1["synopsis"]
             movie_class=MovieClass(show)
             # example of show
             # show: {'OriginalTitle': 'A Quiet Place:\xa0Day One', 'TheatreAuditorium': '3 REX',
@@ -357,37 +413,32 @@ if __name__ == "__main__":
     dataframe = dataframe.reset_index()
     dataframe = dataframe.sort_values(by=["ShowStart"])
 
-    # make list of all movies in output_movies.xlsx
-    new_dataframe = dataframe.loc[:, ['ShowTitle', 'AudienceScore', 'TomatoScore']]
-    new_dataframe=new_dataframe.drop(index=0)
-
+    ######  SHEET 2 in the output.xls -> make list of all movies in output_movies.xlsx
+    dataframe_sheet2 = dataframe.loc[:, ['ShowTitle', 'TomatoYear', 'TomatoTitle', 'AudienceScore', 'TomatoScore', 'Average', 'Synopsis']]
+    print(dataframe_sheet2.head())
+    # drop the empty row with index = 0
+    dataframe_sheet2=dataframe_sheet2.drop(index=0)
+    print(dataframe_sheet2.head())
     # change all "NA" and "" values to None
-    new_dataframe = new_dataframe.replace({'NA': None, '': None})
-
-    # Drop all None Values from dataframe
-    new_dataframe = new_dataframe.dropna(subset=['AudienceScore', 'TomatoScore'])
-
+    dataframe_sheet2 = dataframe_sheet2.replace({'NA': None, '': None})
+    print(dataframe_sheet2.head())
     # remove all duplicates from database
-    new_dataframe = new_dataframe.drop_duplicates()
+    dataframe_sheet2 = dataframe_sheet2.drop_duplicates()
+    print(dataframe_sheet2.head())
 
-    new_dataframe['AudienceScore'] = new_dataframe['AudienceScore'].str.rstrip('%').astype('float') / 100.0
-    new_dataframe['TomatoScore'] = new_dataframe['TomatoScore'].str.rstrip('%').astype('float') / 100.0
-
-    # Adding a new column 'Average' that calculates the average of 'Percentage1' and 'Percentage2', rounding to .02 decimals
-
-    new_dataframe['Average'] = round(((new_dataframe['TomatoScore'] + new_dataframe['AudienceScore']) / 2),2)
-
-
-
-    # Converting the 'Average' back to percentage format
-    new_dataframe['Average'] = (new_dataframe['Average'] * 100).astype(str) + '%'
 
     # Sort in descending order dataframe
-    new_dataframe = new_dataframe.sort_values(by='Average', ascending=False)
+    dataframe_sheet2 = dataframe_sheet2.sort_values(by='Average', ascending=False)
 
 
-    print(new_dataframe.head())
+    # Move one column (e.g., 'A') to the last position
+    columns = list(dataframe_sheet2.columns)
+    columns.remove('Synopsis')
+    columns.append('Synopsis')
+    dataframe_sheet2 = dataframe_sheet2[columns]
 
+    print(dataframe_sheet2.head())
+    ######  SHEET 2 in the output.xls -> make list of all movies in output_movies.xlsx
 
     try:
         dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
@@ -400,13 +451,13 @@ if __name__ == "__main__":
 
     with pd.ExcelWriter(path=filename, engine='openpyxl', mode='a') as writer:
         try:
-            new_dataframe.to_excel(writer, sheet_name='Sheet2', index=False, header=None)
+            dataframe_sheet2.to_excel(writer, sheet_name='Sheet2', index=False, header=True)
         except PermissionError:
             print("Close the file in Excel and try again.")
 
 
 
-
+    dataframe = dataframe.drop(columns=['Synopsis'])
 
     #encoding="UTF-8"
     dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")

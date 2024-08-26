@@ -20,6 +20,7 @@ class MovieClass:
         # self.movie_end = movie_end
         # self.tomato_score = tomato_score
         # self.audience_score=audience_score
+        # self.average = average
         # self.showdate=show_date
         # self.movie_year = movieyear
         # self.movie2D_or_3D = movie_2Dor3D
@@ -27,62 +28,72 @@ class MovieClass:
         if ("dttmShowStart" in showdict):
             self.showStart = ExtractTime(showdict["dttmShowStart"])
         else:
-            self.showStart = "NA"
+            self.showStart = None
 
         if ("dttmShowEnd" in showdict):
             self.showEnd = ExtractTime(showdict["dttmShowEnd"])
         else:
-            self.showEnd = "NA"
+            self.showEnd = None
 
         if ("OriginalTitle" in showdict):
             self.showOriginalTitle = html.unescape(showdict["OriginalTitle"])
         else:
-            self.showOriginalTitle = "NA"
+            self.showOriginalTitle = None
 
         if ("Theatre" in showdict):
             self.showTheatre = showdict["Theatre"]
         else:
-            self.showTheatre = "NA"
+            self.showTheatre = None
 
         if ("TheatreAuditorium" in showdict):
             self.TheatreAuditorium = showdict["TheatreAuditorium"]
         else:
-            self.TheatreAuditorium = "NA"
+            self.TheatreAuditorium = None
 
         if ("PresentationMethod" in showdict):
             self.PressMethod = showdict["PresentationMethod"]
         else:
-            self.PressMethod = "NA"
+            self.PressMethod = None
 
         if ("dttmShowStart" in showdict):
             self.ShowDate = ExtractDate(showdict["dttmShowStart"])
         else:
-            self.ShowDate = "NA"
+            self.ShowDate = None
 
         if ("ProductionYear" in showdict):
             self.ShowCreationDate = showdict["ProductionYear"]
         else:
-            self.ShowCreationDate = "NA"
+            self.ShowCreationDate = None
 
         if ("audience_score" in showdict):
             self.audience_score=showdict["audience_score"]
         else:
-            self.audience_score = "NA"
+            self.audience_score = None
 
         if ("tomatometer" in showdict):
             self.tomato_meter=showdict["tomatometer"]
         else:
-            self.tomato_meter = "NA"
+            self.tomato_meter = None
+
+        if ("average" in showdict):
+            self.average=showdict["average"]
+        else:
+            self.average = None
 
         if ("tm_year" in showdict):
             self.tm_year=showdict["tm_year"]
         else:
-            self.tm_year = "NA"
+            self.tm_year = None
 
         if ("tm_title" in showdict):
             self.tm_title=showdict["tm_title"]
         else:
-            self.tm_title = "NA"
+            self.tm_title = None
+
+        if ("synopsis" in showdict):
+            self.synopsis = showdict["synopsis"]
+        else:
+            self.synopsis = None
 
         self.datasample={
             "ShowStart": self.showStart,
@@ -97,5 +108,7 @@ class MovieClass:
             "TomatoTitle": self.tm_title,
             "AudienceScore": self.audience_score,
             "TomatoScore": self.tomato_meter,
+            "Average": self.average,
+            "Synopsis": self.synopsis,
         }
 
