@@ -7,6 +7,7 @@ import json
 import html
 import re
 
+from icecream import ic
 from bs4 import BeautifulSoup
 from os.path import abspath
 from os.path import exists as file_exsits
@@ -58,7 +59,7 @@ def clean_string(s):
     # Convert to lowercase
     s = s.lower()
     # Remove spaces and punctuation
-    s = re.sub(r'[^\\w\\s]', '', s).replace(' ', '')
+    s = re.sub(r'[^a-z0-9]', '', s)
     return s
 
 def compare_strings(s1, s2):
@@ -112,7 +113,8 @@ def lookup_movie_score_tm(movie_title):
 
     # Find the movie title and if it is similar to the movie_title then change it to "match ok"
     tm_title = movie_soup.find('h1', {'slot': 'titleIntro'}).find('span').text
-    if compare_strings(movienametest, tm_title):
+
+    if compare_strings((movie_title), (tm_title)):
             tm_title = "match ok"
 
     # Find the tomato score and the audience score
@@ -258,7 +260,7 @@ def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2
             with open(file=json_cache,mode="r+") as file: #try opening json file
                 json_data=json.load(file)
                 #print(json_data["Movies"])
-                print(f"Cache:True, movietitle: {movietitle}")
+                print(f"** Looking in cache for, movietitle: {movietitle}")
         except(FileNotFoundError,json.JSONDecodeError) as errorMessage: #if the json file with buffer is not found then
             # create an emptie file
             with open(file=json_cache,mode="r+",encoding="UTF-8",newline=None) as json_file:
@@ -347,7 +349,7 @@ def returnMovieDetails(movienametest:str, path:str="Data/tomato.json"):
         'average': 93.5%
     """
 
-    fetchedData:dict=fetch_data(update=False, json_cache=path,moviename=movienametest,movieyear=movieyearFinnKino)
+    fetchedData:dict=fetch_data(update=False, json_cache=path,moviename=movienametest)
     if (fetchedData == None):
         return
     else:
@@ -383,7 +385,7 @@ if __name__ == "__main__":
     for show in showsDict:
         counter += 1
         tomatoObjectN1={}
-        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), movieyearFinnKino=str(show["ProductionYear"]), path="Data/tomato.json")
+        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), path="Data/tomato.json")
 
         if tomatoObjectN1 != {} and tomatoObjectN1 != None:
             show["audience_score"]=tomatoObjectN1["audience_score"]
