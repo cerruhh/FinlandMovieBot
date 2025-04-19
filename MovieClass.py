@@ -24,6 +24,7 @@ class MovieClass:
         # self.showdate=show_date
         # self.movie_year = movieyear
         # self.movie2D_or_3D = movie_2Dor3D
+        # self.genres = horror, thriller
 
         if ("dttmShowStart" in showdict):
             self.showStart = ExtractTime(showdict["dttmShowStart"])
@@ -95,6 +96,11 @@ class MovieClass:
         else:
             self.synopsis = None
 
+        if ("genres" in showdict):
+            self.genres = showdict["genres"]
+        else:
+            self.synopsis = None
+
         self.datasample={
             "ShowStart": self.showStart,
             "ShowEnd": self.showEnd,
@@ -110,5 +116,6 @@ class MovieClass:
             "TomatoScore": self.tomato_meter,
             "Average": self.average,
             "Synopsis": self.synopsis,
+            "Genres": self.genres,
         }
 

@@ -47,10 +47,10 @@ def calcDateShort(offset:int):
 
 def normalizeTitle(title: str):
     """
-    function that will remove some words from any text
+    function that will remove or censor words from any text
     """
 
-    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ")
+    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
     return title
@@ -218,30 +218,132 @@ def load_kinotfi(day_offset):
     soup = BeautifulSoup(html, "html.parser")
 
     # Find all the date elements and loop through them
-    dates = soup.find_all("div", class_="date-label")
+    dates = soup.find_all('div', class_='kinola-event')
     # print(dates)
     i = 0
     movies = []  # Create an empty dictionary to store the movie information
     for date in dates:
         i += 1
         #logging.info(f"## {i} date: {date}")
-        date_str = date.text.strip()
-        for movie in date.find_next_siblings():
-            # check if the html contains class="show-item"
-            if re.search(r'class="show-item"', str(movie)):
-                title = normalizeTitle(str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip())
-                times = [time.text.strip() for time in movie.select(".time")]
-                theater = movie.select_one(".theater").text.strip()
-                # logging.info(f"#### {i} title: {title} times {times} theater {theater}")
-                for time in times:
-                    day_of_month = date_str.split(sep=" ")[1].split(".")
-                    datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
-                    if calcDate(day_offset) == datestring:
-                        movies.append({'OriginalTitle': title, 'TheatreAuditorium':"" ,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":theater,"ProductionYear":"", "dttmShowEnd":"","PresentationMethod":"NA"})
-                        #print(f"{title} - {datestring} - {time} - {theater}")
+        title = date.find('h6', class_='kinola-event-title-text').text.strip()
+        dates = date.find('div', class_='kinola-event-dates').find('h6')
+        date = date.find('span', class_='kinola-event-date').text.strip()
+        time = date.find('span', class_='kinola-event-time').text.strip()
+
+        title = normalizeTitle(date.find('h6', class_='kinola-event-title-text').text.strip())
+
+        #date_str = date.text.strip()
+        #for movie in date.find_next_siblings():
+        #    # check if the html contains class="show-item"
+        #    if re.search(r'class="show-item"', str(movie)):
+        #        title = normalizeTitle(str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip())
+        #        times = [time.text.strip() for time in movie.select(".time")]
+        #        theater = movie.select_one(".theater").text.strip()
+        #        # logging.info(f"#### {i} title: {title} times {times} theater {theater}")
+        #        for time in times:
+         #           day_of_month = date_str.split(sep=" ")[1].split(".")
+          #          datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
+          #          if calcDate(day_offset) == datestring:
+          #              movies.append({'OriginalTitle': title, 'TheatreAuditorium':"" ,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":theater,"ProductionYear":"", "dttmShowEnd":"","PresentationMethod":"NA"})
+          #              #print(f"{title} - {datestring} - {time} - {theater}")
     browser.quit()
     return movies
 
+
+
+def load_konepajakino(day_offset):
+
+    URL = "https://kinokonepaja.fi/"
+    LOAD_TIME = 4
+
+    # Set up headless Chrome browser
+    chOptions = ChromeOptions()
+    #chOptions.add_experimental_option(value=True, name="detach")
+    chOptions.add_argument("--headless")
+
+    showDate = calcDate(day_offset)
+    # Set up logging
+    # logging.basicConfig(level=logging.INFO)
+
+    with Chrome(options=chOptions) as browser:
+        browser.get(URL)
+        print(f"Opening headless Chrome browser with URL: {URL}")
+        wait(LOAD_TIME)
+        html = browser.page_source
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    shows = []
+    # Find all movie elements
+    movies = soup.find_all('div', class_='kinola-event')
+
+    # Loop through each movie element and extract information
+    for movie in movies:
+        title = normalizeTitle(movie.find('h6', class_='kinola-event-title-text').text.strip())
+        date_str = movie.find('span', class_='kinola-event-date').text.strip()
+        day_of_month = date_str.split(sep=" ")[1].split(".")
+        date = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
+
+        time = movie.find('span', class_='kinola-event-time').text.strip()
+        #theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
+        if date == showDate:
+            shows.append(
+                {'OriginalTitle': title, 'TheatreAuditorium': "Kp1", 'dttmShowStart': f"{date}T{time}:00",
+                 "Theatre": "Konepaja", "ProductionYear": 'NA', 'dttmShowEnd': 'NA',
+                 'PresentationMethod': 'NA'})
+
+    browser.quit()
+    return shows
+
+
+def load_gilda(day_offset):
+
+    URL = "https://www.gilda.fi/elokuvat/"
+    LOAD_TIME = 4
+
+    # Set up headless Chrome browser
+    chOptions = ChromeOptions()
+    #chOptions.add_experimental_option(value=True, name="detach")
+    chOptions.add_argument("--headless")
+
+    showDate = calcDate(day_offset)
+    print(f"Opening headless Chrome browser with URL: {URL} with {showDate}")
+    # Set up logging
+    #logging.basicConfig(level=logging.INFO)
+
+    with Chrome(options=chOptions) as browser:
+        browser.get(URL)
+        print(f"Opening headless Chrome browser with URL: {URL}")
+        wait(LOAD_TIME)
+        html = browser.page_source
+
+    soup = BeautifulSoup(html, "html.parser")
+
+
+    shows = []
+    # Find all movie elements
+    movies = soup.find_all('div', class_='movie movielist__item show')
+
+    # Loop through each movie element and extract information
+    for movie in movies:
+        title = normalizeTitle(movie.find('h3', class_='title').text.strip())
+        showtimes = movie.find_all('div', class_='movie-meta')
+
+        for showtime in showtimes:
+            date_str = showtime.find('div', class_='movie-meta__stuff date nobr').text.strip()
+            day_of_month = date_str.split(sep=" ")[0].split(".")
+            date = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
+
+            time_str = showtime.find('div', class_='movie-meta__stuff time').text.strip()
+            time = time_str.replace('.', ':')
+            theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
+            if date == showDate:
+                shows.append({'OriginalTitle': title, 'TheatreAuditorium': f"{theater}", 'dttmShowStart': f"{date}T{time}:00",
+                       "Theatre": "Lasipalatsi", "ProductionYear": 'NA', 'dttmShowEnd': 'NA',
+                       'PresentationMethod': 'NA'})
+
+    browser.quit()
+    return shows
 
 def load_all(day_offset:int=1):
     dataarray =  []
@@ -258,6 +360,14 @@ def load_all(day_offset:int=1):
         dataarray += load_finnkino(day_offset=day_offset)
     else:
         print("finnkino search is disabled in settings.json")
+    if all_sources["konepaja"] :
+        dataarray +=  load_konepajakino(day_offset=day_offset)
+    else:
+        print("konepaja search is disabled in settings.json")
+    if all_sources["gilda"] :
+        dataarray +=  load_gilda(day_offset=day_offset)
+    else:
+        print("gilda search is disabled in settings.json")
     return dataarray
 
 
