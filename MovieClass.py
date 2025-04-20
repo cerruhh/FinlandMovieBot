@@ -10,6 +10,27 @@ def ExtractDate(time: str):
 def ExtractTime(time: str):
     # print(time[11:16])
     return time[11:16]
+
+
+
+def translate_value(value):
+    # Define the dictionary with translations
+    translations = {
+    "Tennispalatsi, Helsinki": "TP",
+    "BioRex Tripla": "BRT",
+    "Lasipalatsi": "LP",
+    "Kinopalatsi, Helsinki": "KP",
+    "Itis, Helsinki": "ITI",
+    "Konepaja": "KP",
+    "BioRex Redi": "BRR",
+    "Maxim, Helsinki": "MAX"
+}
+    # Check if the value is in the dictionary
+    if value in translations:
+        return translations[value]
+    else:
+        return value
+
 class MovieClass:
     def __init__(self, showdict:dict):
         # self.movie_name=moviename
@@ -42,7 +63,7 @@ class MovieClass:
             self.showOriginalTitle = None
 
         if ("Theatre" in showdict):
-            self.showTheatre = showdict["Theatre"]
+            self.showTheatre = translate_value(showdict["Theatre"])
         else:
             self.showTheatre = None
 

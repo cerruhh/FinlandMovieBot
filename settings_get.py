@@ -11,7 +11,7 @@ def read_settings():
     if not file_exsits("settings.json"):
         with open("settings.json",mode="w+") as settings_file:
             json.dump({
-              "test":True,
+              "test":False,
               "ratings_enabled":True,
               "days_offset": 1,
               "send_mail":True,

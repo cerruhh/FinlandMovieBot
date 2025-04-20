@@ -77,6 +77,9 @@ def extract_number(s):
     match = re.search(r'\d{1,3}', s)
     return int(match.group()) if match else None
 
+
+
+
 def lookup_movie_score_tm(movie_title):
     """ lookup argument: movie title
     returns dictionary that contains tomatometer score, the audience score, the average score, the movie title as it is
@@ -152,8 +155,7 @@ def lookup_movie_score_tm(movie_title):
         return {"tomatometer": "NA", "audience_score": "NA", "average": "NA",
                 "release_year": "NA", "tm_title": "NA", "synopsis": "NA", "status": 404, "genres": ["NA"]}
 
-    if compare_strings((movie_title), (tm_title)):
-            tm_title = "match ok"
+
 
     # Find the tomato score and the audience score
     critic_score_element = movie_soup.find('rt-text', {"slot": "criticsScore"})
@@ -191,6 +193,8 @@ def lookup_movie_score_tm(movie_title):
         average_number = audience_score_value
         average = f"{average_number:.1f}%"
 
+
+
     print(f"tomatometer number: {tomatometer_value}, audience number: {audience_score_value}, average: {average_number}, average with percent: {average}")
 
 
@@ -210,6 +214,12 @@ def lookup_movie_score_tm(movie_title):
         #print(synopsis)
     else:
         synopsis = None
+
+    if compare_strings((movie_title), (tm_title)):
+        tm_title = "match ok"
+    else:
+        critic_score = audience_score = average = average = release_year = synopsis = genres = "NA"
+        tm_title = "no match"
 
    # if release_date_element:
    #     release_year = release_date_element
@@ -554,6 +564,8 @@ if __name__ == "__main__":
             Theatername=sn[1].iloc[4] # theater where movie shows
             # 5 is the movie room
             PresMethod = sn[1].iloc[6]  # if move is 2D or 3D
+            if PresMethod != "3D":
+                PresMethod = ""
             # 7 is the date that the movie is displayed in the theater
             #8 is the production year in the FInnkino theater data
             ProdYear=sn[1].iloc[9] #production year according to tomato website
@@ -564,7 +576,7 @@ if __name__ == "__main__":
 
             #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
             #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod
-            txtfile.write(f"Movie: {Name} ({ProdYear}) - {Tomato} + {AudienceScore} -- {ShowStart}-{ShowEnd} - {Theatername}, {PresMethod} \n")
+            txtfile.write(f"{ShowStart} - {Name} ({ProdYear}) - {Tomato}+{AudienceScore} - {Theatername} {PresMethod} \n")
 
     # con.send_message(msg)
     FILE_LIST=[

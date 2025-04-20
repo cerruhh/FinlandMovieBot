@@ -2,10 +2,12 @@
   "test": false,
   "ratings_enabled": true,
   "days_offset": 1,
-  "send_mail": true,
+  "send_mail": false,
   "sources": {
     "finnkino": true,
     "biorex": true,
-    "kinot.fi": true
+    "kinot.fi": true,
+    "konepaja": true,
+    "gilda" : true
   }
 }

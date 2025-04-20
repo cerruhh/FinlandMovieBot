@@ -313,7 +313,6 @@ def load_gilda(day_offset):
 
     with Chrome(options=chOptions) as browser:
         browser.get(URL)
-        print(f"Opening headless Chrome browser with URL: {URL}")
         wait(LOAD_TIME)
         html = browser.page_source
 
