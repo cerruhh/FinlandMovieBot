@@ -1,45 +1,60 @@
-from os.path import exists as file_exsits
 import json
-import colorama
+from os.path import exists as file_exists
 
 def read_settings():
     """
-    get all settings from settings.json
-    :return:
+    Get all settings from settings.json and secrets.json.
+    :return: Dictionary containing settings.
     """
-    setting_returnable=None
-    if not file_exsits("settings.json"):
-        with open("settings.json",mode="w+") as settings_file:
-            json.dump({
-              "test":False,
-              "ratings_enabled":True,
-              "days_offset": 1,
-              "send_mail":True,
-              "sources": {
-                "finnkino":True,
-                "biorex":True,
-                "kinot.fi":True
-              }
-            },settings_file,indent=2)
+    default_settings = {
+        "test": False,
+        "ratings_enabled": True,
+        "days_offset": 1,
+        "send_mail": True,
+        "sources": {
+            "finnkino": True,
+            "biorex": True,
+            "kinot.fi": True,
+            "konepaja": True,
+            "gilda": True
+        }
+    }
+
+    default_secrets = {
+        "email_key": "app_password",
+        "sender": "sender@example.com",
+        "recipient": "recipient@example.lol"
+    }
+
+    # Initialize settings
+    if not file_exists("settings.json"):
+        with open("settings.json", "w") as settings_file:
+            json.dump(default_settings, settings_file, indent=2)
+        settings = default_settings
     else:
-        with open("settings.json",mode="r") as settings_file:
-            setting_returnable = json.load(settings_file)
-            if setting_returnable["test"]:
-                print("test settings have been activated in settings.json")
-                setting_returnable = {"ratings_enabled": True, "days_offset": 1, "send_mail": False, "sources": {
-                    "finnkino": False, "biorex": False, "kinot.fi": True}}
-    # with open("settings.json",mode="ac"):
-    #     pass
+        with open("settings.json", "r") as settings_file:
+            settings = json.load(settings_file)
+            if settings.get("test"):
+                print("Test settings have been activated in settings.json")
+                settings = {
+                    "ratings_enabled": True,
+                    "days_offset": 1,
+                    "send_mail": False,
+                    "sources": {
+                        "finnkino": True,
+                        "biorex": False,
+                        "kinot.fi": False,
+                        "konepaja": False,
+                        "gilda": False
+                    }
+                }
 
-    if not file_exsits("secrets.json"):
-        with open("secrets.json",mode="w+") as secret_file:
-            json.dump(
-        {
-                "email_key": "app_password",
-                "sender": "sender@example.com",
-                "recipient": "recipient@example.lol",
-            },secret_file,indent=1)
+    # Initialize secrets
+    if not file_exists("secrets.json"):
+        with open("secrets.json", "w") as secret_file:
+            json.dump(default_secrets, secret_file, indent=1)
+        print("Secrets file not defined, please fill in secrets.json")
+        exit(2)
 
-            print(colorama.Fore.RED+"secrets file not defined, please fill in secrets.json")
-            exit(2)
-    return setting_returnable
+    return settings
+

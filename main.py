@@ -7,7 +7,7 @@ import json
 import html
 import re
 
-from icecream import ic
+
 from bs4 import BeautifulSoup
 from os.path import abspath
 from os.path import exists as file_exsits
@@ -17,6 +17,7 @@ import sources
 import emailfunc
 import colorama
 from settings_get import read_settings
+from sources import normalizeTitle
 
 all_settings=read_settings()
 #from update_json import MovieUpdateFunction
@@ -25,6 +26,8 @@ all_settings=read_settings()
 
 DAYOFFSET = all_settings["days_offset"] # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
 SEND_MAIL=all_settings["send_mail"]
+banned_theaters = all_settings["banned_theaters"]
+banned_genres = all_settings["banned_genres"]
 
 Enabled=True
 if not Enabled:
@@ -79,154 +82,73 @@ def extract_number(s):
 
 
 
+import json
+import requests
+from bs4 import BeautifulSoup
+from tmdb import return_movie_details
 
-def lookup_movie_score_tm(movie_title):
-    """ lookup argument: movie title
-    returns dictionary that contains tomatometer score, the audience score, the average score, the movie title as it is
-    on rottentomatoes.com, the release year, the status and the summary of the movie"""
-    # Convert movie title to lowercase and replace spaces with underscores
-    search_term = movie_title.lower().replace(" ", "_")
+def lookup_movie_score_tm(movie_title:str):
+    """
+    Lookup argument: movie title
+    Returns dictionary that contains tomatometer score, audience score, average score, movie title as it is
+    on rottentomatoes.com, release year, status, and summary of the movie.
+    """
 
-    # Create the search URL
+
+    tmdb_title, tmdb_original_title, tmdb_release_date, tmdb_genre_string, tmdb_score, tmdb_language, tmdb_synopsis= return_movie_details(movie_title)
+
+    search_term = tmdb_title.lower().replace(" ", "_")
     search_url = f"https://www.rottentomatoes.com/search?search={search_term}"
-
-    # Send a GET request to the search URL
     response = requests.get(search_url)
     soup = BeautifulSoup(response.content, 'html.parser')
 
-
-    no_results_tag = soup.find('div', class_='search__no-results-copy-group')
-    print(f"no results tag: {no_results_tag}" )
-    #print(f"no results tag bool: {bool(no_results_tag)}")
-    if bool(no_results_tag):
-        # no results
+    if soup.find('div', class_='search__no-results-copy-group'):
         return {"tomatometer": "NA", "audience_score": "NA", "average": "NA", "release_year": "NA", "tm_title": "NA", "synopsis": "NA", "status": 404, "genres": ["NA"]}
 
-    # Find the first movie link after the "Movies" section
     movie_link = soup.find("h2", {"slot": "title", "data-qa": "search-result-title"}).find_next("a")["href"]
-    # movie_link = soup.find("h2", {"slot": "title", "data-qa": "search-result-title"})
-    # if movie_link:
-    #     next_anchor = movie_link.find_next("a")["href"]
-    #     if next_anchor:
-    #         movie_link_href = next_anchor.get("href")
-    #         print("Movie Link Href:", movie_link_href)
-    #     else:
-    #         print("No anchor tag found after the specified h2 tag.")
-    # else:
-    #     print("The specified h2 tag was not found.")
-
-    # Create the full movie URL
     movie_url = f"{movie_link}"
-    #movie_url = f"{movie_link_href}"
-    print(movie_url)
-    # Send a GET request to the movie URL
     movie_response = requests.get(movie_url)
+    print(f"Looking for {movie_title} on tomato: {movie_url} ")
+    # print(f"reference: {tmdb_title}, original title: {tmdb_original_title}, release: {tmdb_release_date}, synopsis: {tmdb_synopsis}, genre: {tmdb_genre_string}")
     movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
 
-    # Send a GET request to the movie URL
-    movie_response = requests.get(movie_url)
-    # print(f"movie response content: {movie_response.content}")
-    movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
-    #with open("debug_movie_page.html", "w", encoding="utf-8") as file:
-    #    file.write(movie_soup.prettify())
-
-    # Find the movie title and if it is similar to the movie_title then change it to "match ok"
-    # tm_title = movie_soup.find('h1', {'slot': 'titleIntro'}).find('span').text
-    #tm_title = movie_soup.find('rt-text', {'slot': 'title'}).text
-    #tm_title = movie_soup.find('rt-text', {'slot': 'title'})
     script_tag = movie_soup.find('script', {'data-json': 'vanity', 'type': 'application/json'})
-    try:
-        json_data = json.loads(script_tag.string.strip())
-        tm_title = json_data.get('title')  # "GoldenEye"
-        release_date_text = json_data.get('lifecycleWindow', {}).get('date')  # "1995-11-17"
-        if release_date_text == None:
-            release_date_text = json_data["value"]
-            if "_" in release_date_text:
-                release_year = release_date_text.split("_")[1]
-            else:
-                release_year = "not known"
-        else:
-            release_year = release_date_text.split("-")[0]
-    except AttributeError:
-        tm_title = None
-        release_date_text = None
-        json_data.get('lifecycleWindow', {}).get('date')  # "1995-11-17"
-        print("Error in webpage")
-        return {"tomatometer": "NA", "audience_score": "NA", "average": "NA",
-                "release_year": "NA", "tm_title": "NA", "synopsis": "NA", "status": 404, "genres": ["NA"]}
+    json_data = json.loads(script_tag.string.strip())
+    tm_title = normalizeTitle(json_data.get('title', "NA"))
+    release_date_text = json_data.get('lifecycleWindow', {}).get('date', "NA")
+    if release_date_text == "NA":
+        release_date_text = tmdb_release_date
+    release_year = release_date_text.split("-")[0] if release_date_text != "NA" else "NA"
 
+    critic_score = movie_soup.find('rt-text', {"slot": "criticsScore"})
+    tomatometer_value = extract_number(critic_score.text) if critic_score else "NA"
 
+    audience_score = movie_soup.find('rt-text', {"slot": "audienceScore"})
+    audience_score_value = extract_number(audience_score.text) if audience_score else "NA"
+    if audience_score_value == None:
+        audience_score = tmdb_score
 
-    # Find the tomato score and the audience score
-    critic_score_element = movie_soup.find('rt-text', {"slot": "criticsScore"})
-    if critic_score_element is not None:
-        critic_score = critic_score_element.text
-        tomatometer_value = extract_number(critic_score)
+    if tomatometer_value is not None and audience_score_value is not None:
+        average = f"{(tomatometer_value + audience_score_value) / 2:.1f}%"
     else:
-        critic_score = None
-        tomatometer_value = None
-    # print(f"tomatometer: {critic_score}")
+        average = "NA"
 
-    audience_score_element = movie_soup.find('rt-text', {"slot": "audienceScore"})
-    if audience_score_element is not None:
-        audience_score = audience_score_element.text
-        audience_score_value = extract_number(audience_score)
-    else:
-        audience_score = None
-        audience_score_value = None
-    # print(f"audience score: {audience_score}")
-    # Find the release date element
+   # average = f"{(tomatometer_value + audience_score_value) / 2:.1f}%" if tomatometer_value != "NA" and audience_score_value != "NA" else "NA"
 
+    #synopsis_div = movie_soup.find('div', class_='synopsis-wrap')
+    #synopsis = synopsis_div.find('rt-text', class_=None).get_text(strip=True) if synopsis_div else "NA"
+    synopsis = tmdb_synopsis
 
-    if tomatometer_value is None and audience_score_value is None:
-        average_number = None
-        average = ""
-    elif tomatometer_value is not None and audience_score_value is not None:
-        # Calculate the average
-        average_number = (tomatometer_value + audience_score_value) / 2
-        average = f"{average_number:.1f}%"
-        # Add the % symbol
-    elif tomatometer_value is not None:
-        average_number = tomatometer_value
-        average = f"{average_number:.1f}%"
-    elif audience_score_value is not None:
-        average_number = audience_score_value
-        average = f"{average_number:.1f}%"
-
-
-
-    print(f"tomatometer number: {tomatometer_value}, audience number: {audience_score_value}, average: {average_number}, average with percent: {average}")
-
-
-
-    #release_date_element = movie_soup.find( string='Release Date (Theaters)')
-    #release_date_text = movie_soup.find('rt-text', {'slot': 'metadataProp'}).text.strip()
-    # release_date_element
-    synopsis_div = movie_soup.find('div', class_='synopsis-wrap')
-    # Find all rt-text elements with the slot attribute set to "metadataGenre"
-    genres = [genre.text for genre in movie_soup.find_all('rt-text', slot='metadataGenre')]
-
-
-    if synopsis_div:
-        # Extract the text from the synopsis div, excluding the "Synopsis" key
-        synopsis = synopsis_div.find('rt-text', class_=None).get_text(strip=True)
-        #print("Synopsis:")
-        #print(synopsis)
-    else:
-        synopsis = None
-
-    if compare_strings((movie_title), (tm_title)):
+    #genres = [genre.text for genre in movie_soup.find_all('rt-text', slot='metadataGenre')] or ["NA"]
+    genres = tmdb_genre_string
+    if compare_strings(tmdb_title, tm_title):
         tm_title = "match ok"
     else:
-        critic_score = audience_score = average = average = release_year = synopsis = genres = "NA"
+        tomatometer_value = audience_score_value = average = release_year = synopsis = genres = "NA"
+        #genres = ["NA"]
         tm_title = "no match"
 
-   # if release_date_element:
-   #     release_year = release_date_element
-   # else:
-    #release_year = None
-
-    return {"tomatometer": critic_score, "audience_score": audience_score, "average": average, "release_year": release_year, "tm_title":tm_title, "status":200, "synopsis":synopsis, "genres":genres}
+    return {"TomatoScore": tomatometer_value, "AudienceScore": audience_score_value, "Average": average, "TomatoYear": release_year, "TomatoTitle": tm_title, "Status": 200, "Synopsis": synopsis, "Genres": genres}
 
 
 def purge_old_items(json_cache:str, days=30):
@@ -252,7 +174,7 @@ def purge_old_items(json_cache:str, days=30):
         movie_details = movie[1] # item[0] is the movie name, item[1] has the movie details
         #print(movie_details["updated"])
         # Parse the "updated" value as a datetime object
-        updated_date = dt.datetime.strptime(movie_details["updated"], "%Y-%m-%d %H:%M:%S.%f")
+        updated_date = dt.datetime.fromisoformat(movie_details["Updated"])
         #print(f"updated_date: {updated_date}")
         # Calculate the difference between current date and updated date
         days_difference = (current_date - updated_date).days
@@ -309,133 +231,72 @@ def conditional_purge(json_cache: str, key_to_check: str):
     return
 
 
-def fetch_data(*,update:bool=False,json_cache:str,moviename:str,movieyear:str="2023"):
-    """ This function acts like a buffer, checking if the movie is already in the json file, if not it will trigger
-        a lookup.
-        This function requires these args:
-        update: set true to enforce update
-        json_cache: the name of the json file with the buffer information,
-        moviename: the movie name
-        movieyear: the movie year
 
-        return:
-        status: like 200,
-        audience_scor:e percentage
-        tomatometer: percentage
-        tm_title: tomatometer name of the movie
-        tm_year: tomatomet year of the movie
-        updated: when the movie was looked up
-        """
+def get_movie_data(buffer_file:str, movie_title:str) -> dict:
+    """
+     Retrieve movie data from a buffer file or fetch it from a website if not found.
 
-    movietitle = html.unescape(moviename)
-    if update:
-        # to enforce an update
-        json_data=None
-        print("json data Update true")
-    else: #no update enforced
-        try:
-            with open(file=json_cache,mode="r+") as file: #try opening json file
-                json_data=json.load(file)
-                #print(json_data["Movies"])
-                print(f"** Looking in cache for, movietitle: {movietitle}")
-        except(FileNotFoundError,json.JSONDecodeError) as errorMessage: #if the json file with buffer is not found then
-            # create an emptie file
-            with open(file=json_cache,mode="r+",encoding="UTF-8",newline=None) as json_file:
-                json.dump({},file)
-            json_data=None
-        if json_data!=None:
-            try: # try and find the movie name from the buffer file
-                jsonresponse = json_data[movietitle]
+     Args:
+     movie_title (str): The title of the movie to retrieve data for.
+     buffer_file (str): The path to the buffer file. Default is 'tomato.json'.
 
-            except(IndexError,KeyError):
-                #print("Cache: not found movie in cache")
-                json_data=None
+     Returns:
+     dict: The movie data retrieved from the buffer file or fetched from the website.
+     """
 
-            else: #If no movie found in the buffer
+    # Try to read the buffer file
+    try:
+        with open(buffer_file, 'r') as file:
+            buffer_data = json.load(file)
+    except FileNotFoundError:
+        buffer_data = {}
 
-                jsondate  = dt.datetime.strptime(ExtractDate(jsonresponse["updated"]), "%Y-%m-%d")
-                thirtyDaysAgo = dt.datetime.now() - dt.timedelta(days=30)
-                #print(type(jsondate))
-                if jsondate < thirtyDaysAgo:
-                    print("Cache is outdated, cache: False")
-                    json_data=None
-                else:
-                    return jsonresponse   #tomato object returned from cache (and is uptodate)
+    # Check if the movie data is already in the buffer
+    if movie_title in buffer_data:
+       # print(f"Retrieving data for '{movie_title}' from buffer.")
+       return buffer_data[movie_title]
+    else:
+        print(f"Fetching data for '{movie_title}' from website.")
+        # Example URL (replace with actual URL and parameters)
+        movie_data  = lookup_movie_score_tm(movie_title)
+         # Add timestamp to the fetched data
+        movie_data['Updated'] = dt.datetime.now().isoformat()
+         # Store the fetched data in the buffer
+        buffer_data[movie_title] = movie_data
+        with open(buffer_file, 'w') as file:
+           json.dump(buffer_data, file, indent=4)
+        return movie_data
 
-######### nothing found in the cache, now check rotten tomato website ################################
-        now = str(dt.datetime.now())
-        if json_data==None or json_data=={}: # or dateinjson < thirtyDaysAgo
-            url=f"{movietitle}"
-
-            if all_settings["ratings_enabled"]:
-                print("Cache not found: now searching Rotten Tomato: " + movietitle)
-                if movietitle == "Muistojen matka":
-                    print("debug")
-                movie_dict=lookup_movie_score_tm(movietitle) #actual lookup
-            else:
-                print("Cache not found, but not doing website lookup as ratings_enabled: False in settings.json")
-                return
-
-            with open(file=json_cache,mode="r+",encoding="UTF-8") as file:
-                jsd=json.load(file) #load the whole file into jsd
-
-            #now add the new movie
-            jsd[movietitle]={
-                "status":200,
-                "audience_score":movie_dict["audience_score"],
-                "tomatometer":movie_dict["tomatometer"],
-                "average": movie_dict["average"],
-                "tm_title": movie_dict["tm_title"],
-                "tm_year": movie_dict["release_year"],
-                "synopsis": movie_dict["synopsis"],
-                "genres": movie_dict["genres"],
-                "updated":now
-            }
-
-            #and write the full file back to the json
-            with open(file=json_cache, mode="w", encoding="UTF-8") as file:
-                json.dump(jsd,file,indent=3)
-
-            #print(f"Cache: False, moviename: {moviename}, IsMovieFound: {movieFound}")
-            if True:
-                return jsd[movietitle]
-    #if not json_data[moviename]:
-    #print(json_data)
-    #print("JsonDataBottm")
-    #print(json_data)
-    # something funny happened and we send this back
-    return {
-        "status":404,
-        "audience_score":"NA",
-        "tomatometer":"NA"
-    }
-
-
-
-def returnMovieDetails(movienametest:str, path:str="Data/tomato.json"):
+def returnMovieDetails(movie_title:str, path:str="Data/tomato.json"):
     """Returns all data from a film from tomatometer (if found)
     args:
         moviename: string
         movieyearFinnKino: string, used to check if the movie queried is the same as the movie result
         path: location to the json file that is used as buffer
     returns: dictionary with
-        'status': 200
-        'audience_score': '95%',
-        'tomatometer': '92%',
-        'tm_title': 'Dune: Part Two',
-        'tm_year': '2024',
+        'Status': 200
+        'AudienceScore': '95%',
+        'TomatoScore': '92%',
+        'TomatoTitle': 'Dune: Part Two',
+        'TomatoYear': '2024',
         'updated': '2024-07-13 21:05:02.218696'
-        'synopsis': 'summary'
-        'average': 93.5%
+        'Synopsis': 'summary'
+        'Average': 93.5%
     """
 
-    fetchedData:dict=fetch_data(update=False, json_cache=path,moviename=movienametest)
-    if (fetchedData == None):
-        return
-    else:
-        return fetchedData
 
-
+#    fetchedData:dict=get_movie_data(buffer_file=path,movie_title=movie_title)
+#    if (fetchedData == None):
+#        return
+#    else:
+#        return fetchedData
+# Function to check if any banned genre is in the genres string
+def contains_banned_genre(genres, banned_genres):
+    genres_list = genres.split(', ')
+    for genre in genres_list:
+        if genre in banned_genres:
+            return True
+    return False
 
 #MAIN
 if __name__ == "__main__":
@@ -461,37 +322,28 @@ if __name__ == "__main__":
             "Genres": "-",
     },index=[False])
 
+    #remove unwanted items
+
     #df.set_index('ID', inplace=True)
     counter = 0
     for show in showsDict:
         counter += 1
-        tomatoObjectN1={}
-        tomatoObjectN1 = returnMovieDetails(movienametest=html.unescape(show["OriginalTitle"]), path="Data/tomato.json")
+        # print (show)
+        movie_result = get_movie_data(movie_title=html.unescape(show["ShowTitle"]), buffer_file="Data/tomato.json")
+        # print(movie_result)
+        merged_dict = {**show, **movie_result}
+        # Convert the dictionary to a DataFrame
+        new_data = pd.DataFrame([merged_dict])
+        # Concatenate the new DataFrame with the existing one
+        dataframe = pd.concat([dataframe, new_data], ignore_index=True)
 
-        if tomatoObjectN1 != {} and tomatoObjectN1 != None:
-            show["audience_score"]=tomatoObjectN1["audience_score"]
-            show["tomatometer"]=tomatoObjectN1["tomatometer"]
-            show["tm_title"] = tomatoObjectN1["tm_title"]
-            show["tm_year"] = tomatoObjectN1["tm_year"]
-            show["average"] = tomatoObjectN1["average"]
-            show["synopsis"] = tomatoObjectN1["synopsis"]
-            show["genres"] = tomatoObjectN1["genres"]
-            movie_class=MovieClass(show)
-            # example of show
-            # show: {'OriginalTitle': 'A Quiet Place:\xa0Day One', 'TheatreAuditorium': '3 REX',
-            # 'dttmShowStart': '2024-07-14T21:00:00', 'Theatre': 'BioRex Kulttuurikasarmi', 'ProductionYear': 'NA',
-            # 'dttmShowEnd': 'NA', 'PresentationMethod': 'NA', 'audience_score': '73%', 'tomatometer': '87%',
-            # 'tm_title': 'A Quiet Place: Day One'}
+    print(f"original dataframe: {len(dataframe)} items")
+    dataframe = dataframe[~dataframe['Genres'].apply(lambda x: contains_banned_genre(x, banned_genres))]
+    print(f"dataframe filtered on genre: {len(dataframe)} items")
+    dataframe = dataframe[~dataframe['Theatre'].isin(banned_theaters)]
+    print(f"dataframe filtered on theaters: {len(dataframe)} items")
 
-            #print(f"movie class: {movie_class}")
-            dataframe.loc[len(dataframe)] =movie_class.datasample
-        else:
-            if tomatoObjectN1 == {} :
-                show["audience_score"]="NA"
-                show["tomatometer"]="NA"
-                movie_class=MovieClass(show)
-                dataframe.loc[len(dataframe)] =movie_class.datasample
-        # print(f"tomato object: {tomatoObjectN1}")
+
 
     # print all to output file
     dataframe = dataframe.reset_index()
@@ -508,7 +360,9 @@ if __name__ == "__main__":
     #print(dataframe_sheet2.head())
     # remove all duplicates from database
 
-    dataframe_sheet2['Genres'] = dataframe_sheet2['Genres'].apply(lambda x: ', '.join([str(genre) for genre in x]))
+    dataframe_sheet2['Genres'] = dataframe_sheet2['Genres'].apply(
+        lambda x: ', '.join([str(genre) for genre in x]) if isinstance(x, list) else str(x))
+
     dataframe_sheet2 = dataframe_sheet2.drop_duplicates()
 
     #print(dataframe_sheet2.head())

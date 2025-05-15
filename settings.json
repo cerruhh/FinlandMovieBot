@@ -8,6 +8,8 @@
     "biorex": true,
     "kinot.fi": true,
     "konepaja": true,
-    "gilda" : true
-  }
+    "gilda" : false
+  },
+  "banned_genres": ["Horror"],
+  "banned_theaters": ["ITIS", "Kino Tapiola", "Kino Myyri", "Kino Kulttuurimylly"]
 }

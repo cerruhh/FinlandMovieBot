@@ -4,6 +4,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.ui import Select
+
 from selenium.webdriver import Chrome
 from selenium.webdriver import ChromeOptions
 from os.path import abspath
@@ -45,14 +46,18 @@ def calcDateShort(offset:int):
     targetDate = dt.datetime.today() + dt.timedelta(days=offset)
     return targetDate.strftime("%d-").lstrip("0") +  targetDate.strftime("%m-%Y").lstrip("0")
 
+def properCapitals(text):
+    return ' '.join(word.capitalize() for word in text.split())
+
 def normalizeTitle(title: str):
     """
     function that will remove or censor words from any text
     """
 
-    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ")
+    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ", "Perhekino: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord,"")
+        title = properCapitals(title)
     return title
 
 
@@ -61,6 +66,30 @@ def convertOneDigit2Two(digit:str):
         return f"0{digit}"
     else:
         return digit[:2]
+
+
+def translate_value(value):
+    # Define the dictionary with translations
+    translations = {
+    "Tennispalatsi, Helsinki": "TP",
+    "BioRex Tripla": "TRIPLA",
+    "Lasipalatsi": "LP",
+    "Kinopalatsi, Helsinki": "KP",
+    "Itis, Helsinki": "ITIS",
+    "Konepaja": "KONEPJ",
+    "BioRex Redi": "REDI",
+    "Maxim, Helsinki": "MAX",
+    "Gilda": "LASIP",
+    "Kino Engel": "ENGEL",
+    "Kino Konepaja": "KONEPJ",
+    "Cinema Orion": "ORION"
+
+    }
+    # Check if the value is in the dictionary
+    if value in translations:
+        return translations[value]
+    else:
+        return value
 
 
 def load_finnkino(day_offset:int,give_all:bool=False):
@@ -79,7 +108,7 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     requestUrl = f"https://www.finnkino.fi/xml/Schedule/?area=1002&dt={calcDateFinnish(day_offset)}"
 #    requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
 
-    print(f"Opening API with URL: {requestUrl}")
+    #print(f"Opening API with URL: {requestUrl}")
 
     ch_opt=ChromeOptions()
     # ch_opt.add_argument("--headless")
@@ -97,7 +126,7 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     target = "<Schedule xmlns:xsd" # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
     index = long_result.find(target)
 
-    result =  long_result[index:]
+    result = long_result[index:]
     if "&" in result:
         result = result.replace("&", "&#38;") ## xmltodict cannot handle "&"
     #print(result)
@@ -116,10 +145,30 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     if data_dict["Schedule"]["Shows"] == None:
         print("No shows tomorrow!")
         exit(code=123456)
-    if give_all:
-        return data_dict
-    elif not give_all:
-        return data_dict["Schedule"]["Shows"]["Show"]
+
+    new_shows_list = []
+    movies = []
+    for show in showsDict:
+        # Extract basic fields
+        title = show.get('Title')
+
+        # Split datetime into date and time components
+        start_datetime = show.get('dttmShowStart', '')
+        if start_datetime:
+            date_part, time_part = start_datetime.split('T')[:2]  # Split at 'T'
+            start_date = date_part  # "2025-04-21"
+            start_time = time_part[:5]  # "10:30" (ignores seconds/timezone)
+        else:
+            start_date, start_time = None, None
+
+
+        movies.append({'ShowTitle': show.get('OriginalTitle'), 'Auditorium': show.get('TheatreAuditorium'),
+                       "ShowDate": f"{start_date}", "ShowStart": f"{start_time}",
+                       "Theatre": translate_value(show.get('Theatre')), "ProductionYear": show.get('ProductionYear'),
+                       'ShowEnd': 'NA', 'PresentationMethod':  show.get('PresentationMethod')})
+
+    print(f"    The number of movies retrieved: {len(movies)}.")
+    return movies
 
 
 def load_biorex(day_offset:int):
@@ -184,14 +233,17 @@ def load_biorex(day_offset:int):
     movies = []
     for movie_card in soup.select('div.showtime-item__entry'):
         title = movie_card.select_one('span.showtime-item__movie-name__value').text.split(" (")[0].strip()
+        title = normalizeTitle(title)
         time = movie_card.find('div', {'class': 'showtime-item__start'}).text.strip()
         location = movie_card.select_one("div.showtime-item__place__value").text.strip().split(",")
-        theater = location[0].strip()
+        theater = translate_value(location[0].strip()) # convert Kinopalatsi, Helsinki to KP
         auditorium = location[1].strip()
-        movies.append({'OriginalTitle': title, 'TheatreAuditorium': auditorium,'dttmShowStart':f"{date}T{time}:00", "Theatre":f"{theater}", "ProductionYear":'NA','dttmShowEnd':'NA','PresentationMethod':'NA'})
+        movies.append({'ShowTitle': title, 'Auditorium': auditorium,"ShowDate":f"{date}", "ShowStart":f"{time}",
+                       "Theatre":f"{theater}", "ProductionYear":'NA','ShowEnd':'NA','PresentationMethod':'NA'})
         #print(f"{title} - {date} - {time} - {theater} - {auditorium}")
     # Close the driver
     #driver.quit()
+    print(f"    The number of movies retrieved: {len(movies)}.")
     return movies
 
 
@@ -199,7 +251,7 @@ def load_biorex(day_offset:int):
 def load_kinotfi(day_offset):
 
     URL = "https://www.kinot.fi/"
-    LOAD_TIME = 4
+    LOAD_TIME = 6
 
     # Set up headless Chrome browser
     chOptions = ChromeOptions()
@@ -213,41 +265,59 @@ def load_kinotfi(day_offset):
         browser.get(URL)
         print(f"Opening headless Chrome browser with URL: {URL}")
         wait(LOAD_TIME)
-        html = browser.page_source
 
+
+        # Find the select box element by its ID
+        select_box = Select(browser.find_element(By.ID, "date-select"))
+        # Get today's date
+        today = dt.datetime.today()
+        intended_date = calcDate(day_offset)
+
+        # Calculate the value to be selected based on the intended date
+        if day_offset ==0:
+            value_to_select = "today"
+        else:
+            value_to_select = intended_date
+
+        # Select the option based on the calculated value
+        select_box.select_by_value(value_to_select)
+        wait(LOAD_TIME)
+
+        # Scroll to the bottom of the webpage to load dynamic content
+        browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        wait(LOAD_TIME)
+
+        # Scroll to the bottom of the webpage to load dynamic content
+        browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        wait(LOAD_TIME)
+
+        html = browser.page_source
     soup = BeautifulSoup(html, "html.parser")
 
-    # Find all the date elements and loop through them
-    dates = soup.find_all('div', class_='kinola-event')
-    # print(dates)
-    i = 0
-    movies = []  # Create an empty dictionary to store the movie information
-    for date in dates:
-        i += 1
-        #logging.info(f"## {i} date: {date}")
-        title = date.find('h6', class_='kinola-event-title-text').text.strip()
-        dates = date.find('div', class_='kinola-event-dates').find('h6')
-        date = date.find('span', class_='kinola-event-date').text.strip()
-        time = date.find('span', class_='kinola-event-time').text.strip()
+    # Find all elements with the class 'text-wrapper'
+    text_wrappers = soup.find_all(class_="text-wrapper")
 
-        title = normalizeTitle(date.find('h6', class_='kinola-event-title-text').text.strip())
+    # Initialize a list to store the extracted information
+    shows = []
 
-        #date_str = date.text.strip()
-        #for movie in date.find_next_siblings():
-        #    # check if the html contains class="show-item"
-        #    if re.search(r'class="show-item"', str(movie)):
-        #        title = normalizeTitle(str((movie.select_one(".movie-title-container h3")).text).split(" (")[0].strip())
-        #        times = [time.text.strip() for time in movie.select(".time")]
-        #        theater = movie.select_one(".theater").text.strip()
-        #        # logging.info(f"#### {i} title: {title} times {times} theater {theater}")
-        #        for time in times:
-         #           day_of_month = date_str.split(sep=" ")[1].split(".")
-          #          datestring = f"{dt.datetime.now().year}-{convertOneDigit2Two(day_of_month[1])}-{convertOneDigit2Two(day_of_month[0])}"
-          #          if calcDate(day_offset) == datestring:
-          #              movies.append({'OriginalTitle': title, 'TheatreAuditorium':"" ,"dttmShowStart":f"{datestring}T{time}:00", "Theatre":theater,"ProductionYear":"", "dttmShowEnd":"","PresentationMethod":"NA"})
-          #              #print(f"{title} - {datestring} - {time} - {theater}")
+    # Iterate over each text wrapper element
+    for wrapper in text_wrappers:
+        # Extract the title, time, and theater from the element
+        title = wrapper.find("div", class_="movie-title-container").get_text(strip=True)
+        title = normalizeTitle(title)
+        time = wrapper.find("div", class_="time").get_text(strip=True)
+        theater = wrapper.find("span", class_="theater-name").get_text(strip=True)
+        theater = translate_value(theater)
+
+        # Append the extracted information to the list
+        shows.append(
+            {'ShowTitle': title, 'Auditorium': "NA", "ShowDate": f"{intended_date}", "ShowStart": f"{time}",
+             "Theatre": theater, "ProductionYear": 'NA', 'ShowEnd': 'NA',
+             'PresentationMethod': 'NA'})
+
     browser.quit()
-    return movies
+    print(f"    The number of movies retrieved: {len(shows)}.")
+    return shows
 
 
 
@@ -288,11 +358,12 @@ def load_konepajakino(day_offset):
         #theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
         if date == showDate:
             shows.append(
-                {'OriginalTitle': title, 'TheatreAuditorium': "Kp1", 'dttmShowStart': f"{date}T{time}:00",
-                 "Theatre": "Konepaja", "ProductionYear": 'NA', 'dttmShowEnd': 'NA',
+                {'ShowTitle': title, 'Auditorium': "Kp1", "ShowDate":f"{date}", "ShowStart":f"{time}",
+                 "Theatre": "KoneP", "ProductionYear": 'NA', 'ShowEnd': 'NA',
                  'PresentationMethod': 'NA'})
 
     browser.quit()
+    print(f"    The number of movies retrieved: {len(shows)}.")
     return shows
 
 
@@ -337,11 +408,12 @@ def load_gilda(day_offset):
             time = time_str.replace('.', ':')
             theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
             if date == showDate:
-                shows.append({'OriginalTitle': title, 'TheatreAuditorium': f"{theater}", 'dttmShowStart': f"{date}T{time}:00",
-                       "Theatre": "Lasipalatsi", "ProductionYear": 'NA', 'dttmShowEnd': 'NA',
+                shows.append({'ShowTitle': title, 'Auditorium': f"{theater}", "ShowDate":f"{date}", "ShowStart":f"{time}",
+                       "Theatre": "LP", "ProductionYear": 'NA', 'ShowEnd': 'NA',
                        'PresentationMethod': 'NA'})
 
     browser.quit()
+    print(f"    The number of movies retrieved: {len(shows)}.")
     return shows
 
 def load_all(day_offset:int=1):

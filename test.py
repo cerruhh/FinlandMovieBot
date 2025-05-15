@@ -6,11 +6,11 @@ import unittest
 from main import returnMovieDetails
 from main import lookup_movie_score_tm
 from main import conditional_purge
-from main import fetch_data
 from main import purge_old_items
 from main import compare_strings
 from main import clean_string
-from icecream import ic
+from tmdb import return_movie_details, tmdb_search_movie
+
 
 
 
@@ -20,7 +20,8 @@ class TestClass(unittest.TestCase):
        #print("lookup_movie_score_tm('Flow 2':)")
        #purge_old_items("../Data/tomato.json", 10)  # purge the oldest items from the buffer, with value -1 all items are purged
        # conditional_purge("../Data/tomato.json", "tm_year") # will remove all values from tomato.json where tm_year = None
-       print(lookup_movie_score_tm("100 litraa sahtia"))
+      # print(lookup_movie_score_tm("Vanhempainilta"))
+       print(tmdb_search_movie("trois amies"))
        print(returnMovieDetails("Rosalie",  "../Data/tomato.json"))
        print(compare_strings("Halve gare 2.8", "halve_gare %&/"))
        sample_text = "This is a sample text with punctuation @#"
