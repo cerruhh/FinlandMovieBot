@@ -9,7 +9,6 @@ from selenium.webdriver import Chrome
 from selenium.webdriver import ChromeOptions
 from os.path import abspath
 
-
 import xmltodict
 import json
 import xmltodict
@@ -20,49 +19,55 @@ from time import sleep as wait
 from bs4 import BeautifulSoup
 from settings_get import read_settings
 
-all_settings=read_settings()
+all_settings = read_settings()
 
-def calcDate(offset:int):
+
+def calcDate(offset: int):
     """
     calcDate converts offset day to date in format 2025-05-18, where arg offset 0 is today, 1 is tomorrow
     """
 
-    targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
+    targetDate = dt.datetime.today() + dt.timedelta(days=offset)
     return targetDate.strftime("%Y-%m-%d")
 
-def calcDateFinnish(offset:int):
+
+def calcDateFinnish(offset: int):
     """
     calcDateFinnish converts offset day to date in format 18.05.2024, where arg offset 0 is today, 1 is tomorrow
     """
 
-    targetDate = dt.datetime.today()  + dt.timedelta(days=offset)
+    targetDate = dt.datetime.today() + dt.timedelta(days=offset)
     return targetDate.strftime("%d.%m.%Y")
 
-def calcDateShort(offset:int):
+
+def calcDateShort(offset: int):
     """
     calcDateShort converts offset day to date in format 8-5-2024, where arg offset=0 is today, 1 is tomorrow
     """
 
     targetDate = dt.datetime.today() + dt.timedelta(days=offset)
-    return targetDate.strftime("%d-").lstrip("0") +  targetDate.strftime("%m-%Y").lstrip("0")
+    return targetDate.strftime("%d-").lstrip("0") + targetDate.strftime("%m-%Y").lstrip("0")
+
 
 def properCapitals(text):
     return ' '.join(word.capitalize() for word in text.split())
+
 
 def normalizeTitle(title: str):
     """
     function that will remove or censor words from any text
     """
 
-    removeWords=("BARNSÖNDAGAR: ","Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ", "Perhekino: ")
+    removeWords = (
+    "BARNSÖNDAGAR: ", "Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ", "Perhekino: ", "Kesäkino: ")
     for censoredWord in removeWords:
-        title = title.replace(censoredWord,"")
+        title = title.replace(censoredWord, "")
         title = properCapitals(title)
     return title
 
 
-def convertOneDigit2Two(digit:str):
-    if len(digit)==1:
+def convertOneDigit2Two(digit: str):
+    if len(digit) == 1:
         return f"0{digit}"
     else:
         return digit[:2]
@@ -71,18 +76,18 @@ def convertOneDigit2Two(digit:str):
 def translate_value(value):
     # Define the dictionary with translations
     translations = {
-    "Tennispalatsi, Helsinki": "TP",
-    "BioRex Tripla": "TRIPLA",
-    "Lasipalatsi": "LP",
-    "Kinopalatsi, Helsinki": "KP",
-    "Itis, Helsinki": "ITIS",
-    "Konepaja": "KONEPJ",
-    "BioRex Redi": "REDI",
-    "Maxim, Helsinki": "MAX",
-    "Gilda": "LASIP",
-    "Kino Engel": "ENGEL",
-    "Kino Konepaja": "KONEPJ",
-    "Cinema Orion": "ORION"
+        "Tennispalatsi, Helsinki": "TP",
+        "BioRex Tripla": "TRIPLA",
+        "Lasipalatsi": "LP",
+        "Kinopalatsi, Helsinki": "KP",
+        "Itis, Helsinki": "ITIS",
+        "Konepaja": "KONEPJ",
+        "BioRex Redi": "REDI",
+        "Maxim, Helsinki": "MAX",
+        "Gilda": "GILDA",
+        "Kino Engel": "ENGEL",
+        "Kino Konepaja": "KONEPJ",
+        "Cinema Orion": "ORION"
 
     }
     # Check if the value is in the dictionary
@@ -92,9 +97,9 @@ def translate_value(value):
         return value
 
 
-def load_finnkino(day_offset:int,give_all:bool=False):
+def load_finnkino(day_offset: int, give_all: bool = False):
     # hdr = {
-     #   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+    #   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
     hdr = {
         'User-Agent': 'Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'}
     currentDate = dt.datetime.now()
@@ -106,11 +111,11 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     # }
 
     requestUrl = f"https://www.finnkino.fi/xml/Schedule/?area=1002&dt={calcDateFinnish(day_offset)}"
-#    requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
+    #    requestXML = requests.get(url=requestUrl, params=searchParameters, headers=hdr)
 
     #print(f"Opening API with URL: {requestUrl}")
 
-    ch_opt=ChromeOptions()
+    ch_opt = ChromeOptions()
     # ch_opt.add_argument("--headless")
     ch_opt.add_experimental_option("detach", True)
 
@@ -123,12 +128,12 @@ def load_finnkino(day_offset:int,give_all:bool=False):
     requestXML = BeautifulSoup(html, "xml")
     long_result = (requestXML.text)
     #    print(long_result)
-    target = "<Schedule xmlns:xsd" # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
+    target = "<Schedule xmlns:xsd"  # text starts with some warning text about xml that should be removed, only part we want starts with <Schedule
     index = long_result.find(target)
 
     result = long_result[index:]
     if "&" in result:
-        result = result.replace("&", "&#38;") ## xmltodict cannot handle "&"
+        result = result.replace("&", "&#38;")  ## xmltodict cannot handle "&"
     #print(result)
     #requestXML.encoding = "UTF-8"
     #requestXML.raise_for_status()
@@ -161,20 +166,19 @@ def load_finnkino(day_offset:int,give_all:bool=False):
         else:
             start_date, start_time = None, None
 
-
         movies.append({'ShowTitle': show.get('OriginalTitle'), 'Auditorium': show.get('TheatreAuditorium'),
                        "ShowDate": f"{start_date}", "ShowStart": f"{start_time}",
                        "Theatre": translate_value(show.get('Theatre')), "ProductionYear": show.get('ProductionYear'),
-                       'ShowEnd': 'NA', 'PresentationMethod':  show.get('PresentationMethod')})
+                       'ShowEnd': 'NA', 'PresentationMethod': show.get('PresentationMethod')})
 
     print(f"    The number of movies retrieved: {len(movies)}.")
     return movies
 
 
-def load_biorex(day_offset:int):
+def load_biorex(day_offset: int):
     #URL = "https://biorex.fi/"
     URL = "https://biorex.fi/en/movies/?type=showtimes"
-    ch_opt=ChromeOptions()
+    ch_opt = ChromeOptions()
     ch_opt.add_argument("--headless")
 
     #ch_opt.add_experimental_option("detach", True)
@@ -205,8 +209,7 @@ def load_biorex(day_offset:int):
     show_times_button.click()
     #print("select Show times instead Movies")
 
-#    dropdown  = Select(driver.find(by=By.ID, value="dayselect"))
-
+    #    dropdown  = Select(driver.find(by=By.ID, value="dayselect"))
 
     #print (targetDate)
 
@@ -216,11 +219,10 @@ def load_biorex(day_offset:int):
     wait(1)
     action = ActionChains(driver)
     counter = 0
-    for i in range(day_offset+1):
+    for i in range(day_offset + 1):
         counter += 1
-        action.send_keys(Keys.DOWN).perform(); #press down key arrow depending on the date
-    action.send_keys(Keys.ENTER).perform() #press ENTER
-
+        action.send_keys(Keys.DOWN).perform();  #press down key arrow depending on the date
+    action.send_keys(Keys.ENTER).perform()  #press ENTER
 
     # Wait for the page to load
     wait(5)
@@ -236,10 +238,10 @@ def load_biorex(day_offset:int):
         title = normalizeTitle(title)
         time = movie_card.find('div', {'class': 'showtime-item__start'}).text.strip()
         location = movie_card.select_one("div.showtime-item__place__value").text.strip().split(",")
-        theater = translate_value(location[0].strip()) # convert Kinopalatsi, Helsinki to KP
+        theater = translate_value(location[0].strip())  # convert Kinopalatsi, Helsinki to KP
         auditorium = location[1].strip()
-        movies.append({'ShowTitle': title, 'Auditorium': auditorium,"ShowDate":f"{date}", "ShowStart":f"{time}",
-                       "Theatre":f"{theater}", "ProductionYear":'NA','ShowEnd':'NA','PresentationMethod':'NA'})
+        movies.append({'ShowTitle': title, 'Auditorium': auditorium, "ShowDate": f"{date}", "ShowStart": f"{time}",
+                       "Theatre": f"{theater}", "ProductionYear": 'NA', 'ShowEnd': 'NA', 'PresentationMethod': 'NA'})
         #print(f"{title} - {date} - {time} - {theater} - {auditorium}")
     # Close the driver
     #driver.quit()
@@ -247,9 +249,7 @@ def load_biorex(day_offset:int):
     return movies
 
 
-
 def load_kinotfi(day_offset):
-
     URL = "https://www.kinot.fi/"
     LOAD_TIME = 6
 
@@ -266,7 +266,6 @@ def load_kinotfi(day_offset):
         print(f"Opening headless Chrome browser with URL: {URL}")
         wait(LOAD_TIME)
 
-
         # Find the select box element by its ID
         select_box = Select(browser.find_element(By.ID, "date-select"))
         # Get today's date
@@ -274,7 +273,7 @@ def load_kinotfi(day_offset):
         intended_date = calcDate(day_offset)
 
         # Calculate the value to be selected based on the intended date
-        if day_offset ==0:
+        if day_offset == 0:
             value_to_select = "today"
         else:
             value_to_select = intended_date
@@ -320,9 +319,7 @@ def load_kinotfi(day_offset):
     return shows
 
 
-
 def load_konepajakino(day_offset):
-
     URL = "https://kinokonepaja.fi/"
     LOAD_TIME = 4
 
@@ -358,7 +355,7 @@ def load_konepajakino(day_offset):
         #theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
         if date == showDate:
             shows.append(
-                {'ShowTitle': title, 'Auditorium': "Kp1", "ShowDate":f"{date}", "ShowStart":f"{time}",
+                {'ShowTitle': title, 'Auditorium': "Kp1", "ShowDate": f"{date}", "ShowStart": f"{time}",
                  "Theatre": "KoneP", "ProductionYear": 'NA', 'ShowEnd': 'NA',
                  'PresentationMethod': 'NA'})
 
@@ -368,7 +365,6 @@ def load_konepajakino(day_offset):
 
 
 def load_gilda(day_offset):
-
     URL = "https://www.gilda.fi/elokuvat/"
     LOAD_TIME = 4
 
@@ -389,7 +385,6 @@ def load_gilda(day_offset):
 
     soup = BeautifulSoup(html, "html.parser")
 
-
     shows = []
     # Find all movie elements
     movies = soup.find_all('div', class_='movie movielist__item show')
@@ -408,22 +403,24 @@ def load_gilda(day_offset):
             time = time_str.replace('.', ':')
             theater = showtime.find('div', class_='movie-meta__stuff theater movie_meta__screen_name').text.strip()
             if date == showDate:
-                shows.append({'ShowTitle': title, 'Auditorium': f"{theater}", "ShowDate":f"{date}", "ShowStart":f"{time}",
-                       "Theatre": "LP", "ProductionYear": 'NA', 'ShowEnd': 'NA',
-                       'PresentationMethod': 'NA'})
+                shows.append(
+                    {'ShowTitle': title, 'Auditorium': f"{theater}", "ShowDate": f"{date}", "ShowStart": f"{time}",
+                     "Theatre": "LP", "ProductionYear": 'NA', 'ShowEnd': 'NA',
+                     'PresentationMethod': 'NA'})
 
     browser.quit()
     print(f"    The number of movies retrieved: {len(shows)}.")
     return shows
 
-def load_all(day_offset:int=1):
-    dataarray =  []
-    all_sources=all_settings["sources"]
-    if all_sources["biorex"] :
-        dataarray =  load_biorex(day_offset=day_offset)
+
+def load_all(day_offset: int = 1):
+    dataarray: list = []
+    all_sources = all_settings["sources"]
+    if all_sources["biorex"]:
+        dataarray = load_biorex(day_offset=day_offset)
     else:
         print("biorex search is disabled in settings.json")
-    if all_sources["kinot.fi"] :
+    if all_sources["kinot.fi"]:
         dataarray += load_kinotfi(day_offset=day_offset)
     else:
         print("kinot.fi search is disabled in settings.json")
@@ -431,15 +428,12 @@ def load_all(day_offset:int=1):
         dataarray += load_finnkino(day_offset=day_offset)
     else:
         print("finnkino search is disabled in settings.json")
-    if all_sources["konepaja"] :
-        dataarray +=  load_konepajakino(day_offset=day_offset)
+    if all_sources["konepaja"]:
+        dataarray += load_konepajakino(day_offset=day_offset)
     else:
         print("konepaja search is disabled in settings.json")
-    if all_sources["gilda"] :
-        dataarray +=  load_gilda(day_offset=day_offset)
+    if all_sources["gilda"]:
+        dataarray += load_gilda(day_offset=day_offset)
     else:
         print("gilda search is disabled in settings.json")
     return dataarray
-
-
-
