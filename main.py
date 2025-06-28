@@ -1,5 +1,4 @@
 from openpyxl import load_workbook
-import colorama
 import requests
 import datetime as dt
 import pandas as pd
@@ -15,7 +14,6 @@ from os.path import exists as file_exsits
 from MovieClass import MovieClass
 import sources
 import emailfunc
-import colorama
 from settings_get import read_settings
 from sources import normalizeTitle
 
@@ -384,7 +382,7 @@ if __name__ == "__main__":
     try:
         dataframe.to_excel(abspath("Data/output.xlsx"),index=False)
     except PermissionError:
-        print(colorama.Fore.YELLOW + "Please close Excel and try again.")
+        print("Please close Excel and try again.")
 
     filename = "Data/output.xlsx"
 

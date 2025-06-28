@@ -20,7 +20,7 @@ def clean_json_file(input_file: str, output_file: str) -> None:
         }
 
         # Write cleaned data to new file
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(cleaned_data, f, indent=4, ensure_ascii=False)
 
         print(f"Cleaned data saved to {output_file}")

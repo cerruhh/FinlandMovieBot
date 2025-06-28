@@ -2,6 +2,7 @@ import requests
 import json
 from urllib.parse import quote
 from pathlib import Path
+from datetime import datetime, timedelta
 
 def load_secrets():
     # Get path to secrets.json relative to this file
@@ -32,7 +33,15 @@ def tmdb_search_movie(search_string:str)-> str:
     try:
         # URL-encode the search string to handle special characters
         encoded_search = quote(search_string)
-        url = f"https://api.themoviedb.org/3/search/movie?query={encoded_search}&include_adult=true&page=1"
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        last_18_months = (datetime.now() - timedelta(days=18 * 30)).strftime("%Y-%m-%d")  # Approximate 18 months
+        url = (
+            f"https://api.themoviedb.org/3/search/movie?"
+            f"query={encoded_search}&"
+            f"include_adult=true&"
+            f"page=1"
+        )
 
         # Load secrets with validation
         secrets = load_secrets()
@@ -77,7 +86,7 @@ def tmdb_genres() -> dict:
         "Authorization": tmdb_api
     }
 
-    response  = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers)
     genres = response.json()["genres"]
     # Create a dictionary: {id: name}
     genre_dict = {genre["id"]: genre["name"] for genre in genres}
@@ -97,7 +106,7 @@ def return_movie_details(search_string:str):
     release_date = movie.get("release_date", "NA")
     language = movie.get("original_language")
     synopsis = movie.get("overview", "NA")
-    score =  movie.get("vote_average", "NA")
+    score = movie.get("vote_average", "NA")
     if score != "NA":
         score = round(10*score)
 
