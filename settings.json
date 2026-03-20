@@ -4,12 +4,12 @@
   "days_offset": 1,
   "send_mail": false,
   "sources": {
-    "finnkino": true,
+    "finnkino": false,
     "biorex": true,
     "kinot.fi": true,
     "konepaja": true,
-    "gilda" : false
+    "gilda" : true
   },
-  "banned_genres": ["Horror"],
-  "banned_theaters": ["ITIS", "Kino Tapiola", "Kino Myyri", "Kino Kulttuurimylly"]
+  "banned_genres": [""],
+  "banned_theaters": ["ITIS", "Kino Tapiola", "Kino Myyri", "Kino Kulttuurimylly", "Cinema Sheryl"]
 }
