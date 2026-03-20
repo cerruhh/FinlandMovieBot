@@ -12,8 +12,10 @@ try:
     with open("Data/secrets.json", "r") as secret_file:
         secrets = json.load(secret_file)
         TOKEN = secrets["telegram_token"]
-        # Convert the ID to an integer since Telegram checks it as a number
-        ALLOWED_USER_ID = int(secrets["telegram_user_id"])
+        ALLOWED_USER_IDS = secrets["allowed_user_ids"] # Now a list!
+except Exception as e:
+    print(f"❌ ERROR loading secrets: {e}")
+    sys.exit(1)
 except FileNotFoundError:
     print("❌ ERROR: Data/secrets.json not found! Please create it.")
     sys.exit(1)
@@ -24,121 +26,137 @@ except ValueError:
     print("❌ ERROR: telegram_user_id in secrets.json must be a number.")
     sys.exit(1)
 
+# Create a lock so only one person can scrape at a time
+scrape_lock = asyncio.Lock()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a greeting when you type /start"""
-    if update.effective_user.id != ALLOWED_USER_ID:
+    if update.effective_user.id not in ALLOWED_USER_IDS:
+        await update.message.reply_text("Sorry, you are not authorized to use this bot.")
         return
 
     await update.message.reply_text(
-        "Hello! I am your Cinema Scraper.\n"
+        "Hello! I this is Helsinki Film Scraper.\n"
         "Commands:\n"
-        "/scrape - Runs tomorrow\n"
+        "/scrape - Checks movies that run tomorrow\n"
         "/scrape today - Runs for today\n"
         "/scrape 1 - Runs for today\n"
         "/scrape tomorrow - Runs for tomorrow\n"
-        "/scrape 2 - Runs for the day after tomorrow"
+        "/scrape 2 - Runs for the day after tomorrow\n"
+        "/scrape # - Runs over # days"
     )
 
 
 async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Triggers main.py and streams the output back to Telegram"""
-    if update.effective_user.id != ALLOWED_USER_ID:
-        await update.message.reply_text("Unauthorized user.")
+    if update.effective_user.id not in ALLOWED_USER_IDS:
         return
 
-    # 1. Parse the command argument
-    offset_arg = ""
-    display_name = "the default day: tomorrow"
+    # Check if someone else is already using it
+    if scrape_lock.locked():
+        await update.message.reply_text("⏳ Someone else is currently using the scraper! Please wait a minute and try again.")
+        return
 
-    if context.args:
-        user_input = context.args[0].lower()
-        if user_input == "today":
-            offset_arg = "0"
-            display_name = "today"
-        elif user_input == "tomorrow":
-            offset_arg = "1"
-            display_name = "tomorrow"
-        elif user_input.isdigit() or (user_input.startswith('-') and user_input[1:].isdigit()):
-            offset_arg = user_input
-            display_name = f"offset {user_input}"
-        else:
-            await update.message.reply_text("⚠️ Invalid argument. Use: /scrape today, /scrape tomorrow, or /scrape 2")
-            return
+    # Lock the doors! Only one scrape runs inside this block at a time.
+    async with scrape_lock:
 
-    # 2. Create the live status message
-    status_msg = await update.message.reply_text(f"🎬 Starting the scraper for {display_name}...")
+        # 1. Parse the command argument
+        offset_arg = ""
+        display_name = "the default day: tomorrow"
 
-    # Build the command
-    cmd = [sys.executable, "-u", "main.py"]
-    if offset_arg:
-        cmd.append(offset_arg)
-
-    try:
-        # 3. Start the subprocess asynchronously
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT  # Combine errors into standard output
-        )
-
-        output_buffer = []
-        last_update_time = time.time()
-
-        # 4. Read the output line-by-line as it prints
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-
-            decoded_line = line.decode('utf-8', errors='ignore').strip()
-            if decoded_line:
-                output_buffer.append(decoded_line)
-                # Keep only the last 15 lines so the Telegram message doesn't become massive
-                output_buffer = output_buffer[-15:]
-
-                # Update the Telegram message every 2 seconds to avoid rate limits
-                if time.time() - last_update_time > 2.0:
-                    try:
-                        # Format as a code block for easy reading
-                        display_text = f"⏳ **Running Scraper ({display_name})...**\n```text\n" + "\n".join(
-                            output_buffer) + "\n```"
-                        await status_msg.edit_text(display_text, parse_mode="Markdown")
-                        last_update_time = time.time()
-                    except Exception:
-                        pass  # Ignore minor Telegram errors like "Message is not modified"
-
-        # Wait for the process to fully close
-        await process.wait()
-
-        # Final update to the status box
-        final_text = f"✅ **Scraping Finished!**\n```text\n" + "\n".join(output_buffer[-5:]) + "\n```"
-        try:
-            await status_msg.edit_text(final_text, parse_mode="Markdown")
-        except Exception:
-            pass
-
-        # 5. Check results and send files
-        if process.returncode == 0:
-            excel_path = "Data/output.xlsx"
-            txt_path = "Data/output.txt"
-
-            if os.path.exists(excel_path) and os.path.exists(txt_path):
-                await update.message.reply_document(document=open(txt_path, 'rb'))
-                await update.message.reply_document(document=open(excel_path, 'rb'))
+        if context.args:
+            user_input = context.args[0].lower()
+            if user_input == "today":
+                offset_arg = "0"
+                display_name = "today"
+            elif user_input == "tomorrow":
+                offset_arg = "1"
+                display_name = "tomorrow"
+            elif user_input.isdigit() or (user_input.startswith('-') and user_input[1:].isdigit()):
+                offset_arg = user_input
+                display_name = f"offset {user_input}"
             else:
-                await update.message.reply_text("⚠️ Script finished, but output files were missing.")
-        else:
-            await update.message.reply_text("❌ The script crashed or returned an error code.")
+                await update.message.reply_text("⚠️ Invalid argument. Use: /scrape today, /scrape tomorrow, or /scrape 2")
+                return
 
-    except Exception as e:
-        await update.message.reply_text(f"❌ Failed to run subprocess: {e}")
+        # 2. Create the live status message
+        status_msg = await update.message.reply_text(f"🎬 Starting the scraper for {display_name}...")
+
+        # Build the command
+        cmd = [sys.executable, "-u", "main.py"]
+        if offset_arg:
+            cmd.append(offset_arg)
+
+        try:
+            # 3. Start the subprocess asynchronously
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT  # Combine errors into standard output
+            )
+
+            output_buffer = []
+            last_update_time = time.time()
+
+            # 4. Read the output line-by-line as it prints
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+
+                decoded_line = line.decode('utf-8', errors='ignore').strip()
+                if decoded_line:
+                    output_buffer.append(decoded_line)
+                    # Keep only the last 15 lines so the Telegram message doesn't become massive
+                    output_buffer = output_buffer[-15:]
+
+                    # Update the Telegram message every 2 seconds to avoid rate limits
+                    if time.time() - last_update_time > 2.0:
+                        try:
+                            # Format as a code block for easy reading
+                            display_text = f"⏳ **Running Scraper ({display_name})...**\n```text\n" + "\n".join(
+                                output_buffer) + "\n```"
+                            await status_msg.edit_text(display_text, parse_mode="Markdown")
+                            last_update_time = time.time()
+                        except Exception:
+                            pass  # Ignore minor Telegram errors like "Message is not modified"
+
+            # Wait for the process to fully close
+            await process.wait()
+
+            # Final update to the status box
+            final_text = f"✅ **Scraping Finished!**\n```text\n" + "\n".join(output_buffer[-5:]) + "\n```"
+            try:
+                await status_msg.edit_text(final_text, parse_mode="Markdown")
+            except Exception:
+                pass
+
+            # 5. Check results and send files
+            if process.returncode == 0:
+                excel_path = "Data/output.xlsx"
+                txt_path = "Data/output.txt"
+
+                if os.path.exists(excel_path) and os.path.exists(txt_path):
+                    await update.message.reply_document(document=open(txt_path, 'rb'))
+                    await update.message.reply_document(document=open(excel_path, 'rb'))
+
+                    # CLEANUP: Delete the files so the next user gets a fresh slate
+                    os.remove(excel_path)
+                    os.remove(txt_path)
+                else:
+                    await update.message.reply_text("⚠️ Script finished, but output files were missing.")
+            else:
+                await update.message.reply_text("❌ The script crashed or returned an error code.")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Failed to run subprocess: {e}")
 
 async def notify_startup(application: Application):
-    """Sends a message to the admin when the bot boots up."""
+    """Sends a message to the first admin in the list when the bot boots up."""
     try:
+        # Use the first ID in the list
+        admin_id = ALLOWED_USER_IDS[0]
         await application.bot.send_message(
-            chat_id=ALLOWED_USER_ID,
+            chat_id=admin_id,
             text="🤖 *FinlandMovieBot* is online and ready on morko! \nUse /scrape to get started.",
             parse_mode="Markdown"
         )
