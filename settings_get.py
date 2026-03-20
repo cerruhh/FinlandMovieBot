@@ -63,8 +63,8 @@ def read_settings():
                 # settings["banned_theaters"] = []
 
     # Initialize secrets
-    if not file_exists("secrets.json"):
-        with open("secrets.json", "w") as secret_file:
+    if not file_exists("Data/secrets.json"):
+        with open("Data/secrets.json", "w") as secret_file:
             json.dump(default_secrets, secret_file, indent=1)
         print("Secrets file not defined, please fill in secrets.json")
         exit(2)

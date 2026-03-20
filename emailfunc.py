@@ -14,7 +14,7 @@ DAYOFFSET = all_settings["days_offset"] # 1 = tomorrow, 2 = the day after tomorr
 searchString=(datetime.datetime.now()+datetime.timedelta(DAYOFFSET)).strftime("%d.%m.%Y")
 
 def returnUserData():
-    with open(file="secrets.json",encoding="UTF-8",mode="r+",newline=None) as file:
+    with open(file="Data/secrets.json",encoding="UTF-8",mode="r+",newline=None) as file:
         try:
             f=json.load(file)
             emk=f["email_key"]
