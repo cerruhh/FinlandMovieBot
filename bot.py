@@ -134,10 +134,21 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Failed to run subprocess: {e}")
 
+async def notify_startup(application: Application):
+    """Sends a message to the admin when the bot boots up."""
+    try:
+        await application.bot.send_message(
+            chat_id=ALLOWED_USER_ID,
+            text="🤖 *FinlandMovieBot* is online and ready on morko! \nUse /scrape to get started.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Failed to send startup message: {e}")
+
 
 if __name__ == '__main__':
     print("Starting Telegram Bot...")
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(notify_startup).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("scrape", run_scraper))
