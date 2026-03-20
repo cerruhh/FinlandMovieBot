@@ -49,7 +49,7 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 1. Parse the command argument
     offset_arg = ""
-    display_name = "the default day"
+    display_name = "the default day: tomorrow"
 
     if context.args:
         user_input = context.args[0].lower()
