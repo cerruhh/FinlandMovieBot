@@ -2,6 +2,7 @@ import datetime as dt
 import html
 import re
 from os.path import abspath
+import os
 
 import pandas as pd
 
@@ -161,6 +162,10 @@ def purge_old_items(json_cache:str, days=30):
     Returns:
         empty: the json_cache is updated
     """
+    if not os.path.exists(json_cache):
+        with open(json_cache, "w", encoding="UTF-8") as file:
+            file.write("{}")
+
     with open(file=json_cache, mode="r+", encoding="UTF-8") as file:
         data = json.load(file)  # load the whole json file into dictionary "data"
 
@@ -212,6 +217,10 @@ def conditional_purge(json_cache: str, key_to_check: str):
         conditional_purge("Data/tomato.json", "audience_score")
         conditional_purge("Data/tomato.json", "tm_year")
     """
+    if not os.path.exists(json_cache):
+        with open(json_cache, "w", encoding="UTF-8") as file:
+            file.write("{}")
+
     with open(file=json_cache, mode="r+", encoding="UTF-8") as file:
         data = json.load(file)  # Load the whole JSON file into dictionary "data"
 
