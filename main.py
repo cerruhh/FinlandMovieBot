@@ -1,21 +1,15 @@
-from openpyxl import load_workbook
-import requests
 import datetime as dt
-import pandas as pd
-import json
 import html
 import re
-
-
-from bs4 import BeautifulSoup
 from os.path import abspath
-from os.path import exists as file_exsits
 
-from MovieClass import MovieClass
-import sources
+import pandas as pd
+
 import emailfunc
+import sources_playwright
 from settings_get import read_settings
-from sources import normalizeTitle
+from sources_playwright import normalizeTitle
+import sys
 
 all_settings=read_settings()
 #from update_json import MovieUpdateFunction
@@ -23,6 +17,13 @@ all_settings=read_settings()
 
 
 DAYOFFSET = all_settings["days_offset"] # 1 = tomorrow, 2 = the day after tomorrow, -1 yesterday, 0:today
+# Override with command-line argument if the bot provides one
+if len(sys.argv) > 1:
+    try:
+        DAYOFFSET = int(sys.argv[1])
+    except ValueError:
+        pass
+
 SEND_MAIL=all_settings["send_mail"]
 banned_theaters = all_settings["banned_theaters"]
 banned_genres = all_settings["banned_genres"]
@@ -126,7 +127,7 @@ def lookup_movie_score_tm(movie_title:str):
     if audience_score_value == None:
         audience_score = tmdb_score
 
-    if tomatometer_value is not None and audience_score_value is not None:
+    if tomatometer_value not in [None, "NA"] and audience_score_value not in [None, "NA"]:
         average = f"{(tomatometer_value + audience_score_value) / 2:.1f}%"
     else:
         average = "NA"
@@ -299,7 +300,7 @@ def contains_banned_genre(genres, banned_genres):
 #MAIN
 if __name__ == "__main__":
     purge_old_items("Data/tomato.json", 30)  # purge the oldest items from the buffer, with value -1 all items are purged
-    showsDict=sources.load_all(DAYOFFSET) #loads all the source data from the different theater websites
+    showsDict=sources_playwright.load_all(DAYOFFSET) #loads all the source data from the different theater websites
 
     #first data-row, does not contain relevant data
     dataframe=pd.DataFrame(data={
@@ -345,7 +346,7 @@ if __name__ == "__main__":
 
     # print all to output file
     dataframe = dataframe.reset_index()
-    dataframe = dataframe.sort_values(by=["ShowStart"])
+    dataframe = dataframe.sort_values(by=["ShowTitle", "ShowStart"])
 
     ######  SHEET 2 in the output.xls -> make list of all movies in output_movies.xlsx
     dataframe_sheet2 = dataframe.loc[:, ['ShowTitle', 'TomatoYear', 'TomatoTitle', 'AudienceScore', 'TomatoScore', 'Average', 'Synopsis', "Genres"]]
