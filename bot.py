@@ -103,6 +103,7 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 1. Parse Arguments
         offset_arg = "1"  # Default
+        display_name = "tomorrow"
 
         if context.args:
             user_input = context.args[0].lower()
@@ -136,6 +137,9 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stderr=asyncio.subprocess.STDOUT  # Combine errors into standard output
             )
 
+            output_buffer = []
+            last_update_time = time.time()
+
             # 3. Stream output to log file
             while True:
                 line = await process.stdout.readline()
@@ -144,16 +148,54 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 decoded_line = line.decode('utf-8', errors='ignore').strip()
                 if decoded_line:
-                    # This pushes scraper output into your uniform log!
+                    # Save to your uniform log file
                     logger.info(f"[SCRAPER] {decoded_line}")
+
+                    # Add to Telegram buffer
+                    output_buffer.append(decoded_line)
+                    # Keep only the last 15 lines so the Telegram message doesn't become massive
+                    output_buffer = output_buffer[-15:]
+
+                    # Update the Telegram message every 2 seconds to avoid rate limits
+                    if time.time() - last_update_time > 2.0:
+                        try:
+                            display_text = f"⏳ **Running Scraper ({display_name})...**\n```text\n" + "\n".join(
+                                output_buffer) + "\n```"
+                            await status_msg.edit_text(display_text, parse_mode="Markdown")
+                            last_update_time = time.time()
+                        except Exception:
+                            pass  # Ignore minor Telegram errors like "Message is not modified"
 
             # Wait for the process to fully close
             await process.wait()
 
+            # Final update to the status box
+            try:
+                final_text = f"✅ **Scraping Finished!**\n```text\n" + "\n".join(output_buffer[-5:]) + "\n```"
+                await status_msg.edit_text(final_text, parse_mode="Markdown")
+            except Exception:
+                pass
+
             if process.returncode == 0:
                 logger.info("Scraper finished successfully. Sending files.")
-                # ... (code to send Data/output.xlsx and Data/output.txt) ...
-                # ... (code to os.remove the files) ...
+
+                excel_path = "Data/output.xlsx"
+                txt_path = "Data/output.txt"
+
+                if os.path.exists(excel_path) and os.path.exists(txt_path):
+                    # Send the files to the user
+                    await update.message.reply_document(document=open(txt_path, 'rb'))
+                    await update.message.reply_document(document=open(excel_path, 'rb'))
+
+                    # CLEANUP: Delete the files so the next user gets a fresh slate
+                    os.remove(excel_path)
+                    os.remove(txt_path)
+
+                    # Optional: Send a final success message
+                    await update.message.reply_text("✅ Scraping completed and files delivered!")
+                else:
+                    logger.warning("Script finished, but output files were missing.")
+                    await update.message.reply_text("⚠️ Script finished, but output files were missing.")
             else:
                 logger.error(f"Scraper exited with error code {process.returncode}")
                 await update.message.reply_text("❌ Scraper encountered an error.")
