@@ -3,12 +3,17 @@ import sys
 import asyncio
 import time
 import json
+import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from logging_config import setup_uniform_logging
 
 # Initialize the logger
 logger = setup_uniform_logging("FinlandMovieBot")
+
+# Mute the noisy network logs from Telegram's background libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # --- Configuration: Load Secrets ---
 try:
