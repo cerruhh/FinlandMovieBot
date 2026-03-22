@@ -29,6 +29,45 @@ except ValueError:
 # Create a lock so only one person can scrape at a time
 scrape_lock = asyncio.Lock()
 
+
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Adds a new user ID to the secrets.json file."""
+    # SECURITY: Only the first person in the list (you) can add others
+    if update.effective_user.id != ALLOWED_USER_IDS[0]:
+        await update.message.reply_text("⛔ Only the primary admin can add new users.")
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("⚠️ Please provide a numeric User ID. Usage: `/add_user 123456789`",
+                                        parse_mode="Markdown")
+        return
+
+    new_id = int(context.args[0])
+
+    if new_id in ALLOWED_USER_IDS:
+        await update.message.reply_text("ℹ️ That user is already authorized.")
+        return
+
+    # Update the local list
+    ALLOWED_USER_IDS.append(new_id)
+
+    # Save to secrets.json permanently
+    try:
+        # Load current file to preserve other keys (like the token)
+        with open("Data/secrets.json", "r") as f:
+            data = json.load(f)
+
+        data["allowed_user_ids"] = ALLOWED_USER_IDS
+
+        with open("Data/secrets.json", "w") as f:
+            json.dump(data, f, indent=4)
+
+        await update.message.reply_text(f"✅ User `{new_id}` has been authorized and saved to secrets!",
+                                        parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to save to secrets.json: {e}")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a greeting when you type /start"""
     if update.effective_user.id not in ALLOWED_USER_IDS:
@@ -38,12 +77,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Hello! I this is Helsinki Film Scraper.\n"
         "Commands:\n"
-        "/scrape - Checks movies that run tomorrow\n"
-        "/scrape today - Runs for today\n"
-        "/scrape 1 - Runs for today\n"
-        "/scrape tomorrow - Runs for tomorrow\n"
-        "/scrape 2 - Runs for the day after tomorrow\n"
-        "/scrape # - Runs over # days"
+        "/scrape today - Runs for today, tomorrow\n"
+        "/scrape # - Runs over # days\n"
+        "/add_user ###### - Adds a user_id -> @userinfobot"
     )
 
 
@@ -170,6 +206,7 @@ if __name__ == '__main__':
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("scrape", run_scraper))
+    app.add_handler(CommandHandler("add_user", add_user))
 
     print("Bot is listening! Send /start to it on Telegram.")
     app.run_polling()
