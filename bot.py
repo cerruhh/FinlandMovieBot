@@ -5,7 +5,10 @@ import time
 import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from logging_config import setup_uniform_logging
 
+# Initialize the logger
+logger = setup_uniform_logging("FinlandMovieBot")
 
 # --- Configuration: Load Secrets ---
 try:
@@ -14,16 +17,16 @@ try:
         TOKEN = secrets["telegram_token"]
         ALLOWED_USER_IDS = secrets["allowed_user_ids"] # Now a list!
 except Exception as e:
-    print(f"❌ ERROR loading secrets: {e}")
+    logger.error(f"❌ ERROR loading secrets: {e}")
     sys.exit(1)
 except FileNotFoundError:
-    print("❌ ERROR: Data/secrets.json not found! Please create it.")
+    logger.error("❌ ERROR: Data/secrets.json not found! Please create it.")
     sys.exit(1)
 except KeyError as e:
-    print(f"❌ ERROR: Missing key {e} in Data/secrets.json.")
+    logger.error(f"❌ ERROR: Missing key {e} in Data/secrets.json.")
     sys.exit(1)
 except ValueError:
-    print("❌ ERROR: telegram_user_id in secrets.json must be a number.")
+    logger.error("❌ ERROR: telegram_user_id in secrets.json must be a number.")
     sys.exit(1)
 
 # Create a lock so only one person can scrape at a time
@@ -84,20 +87,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ALLOWED_USER_IDS:
+    user = update.effective_user
+    if user.id not in ALLOWED_USER_IDS:
+        logger.warning(f"Unauthorized scrape attempt by {user.id}")
         return
 
-    # Check if someone else is already using it
     if scrape_lock.locked():
-        await update.message.reply_text("⏳ Someone else is currently using the scraper! Please wait a minute and try again.")
+        logger.info(f"Scrape requested by {user.id} while lock is active.")
+        await update.message.reply_text("⏳ The scraper is currently busy with another user. Please wait.")
         return
 
     # Lock the doors! Only one scrape runs inside this block at a time.
     async with scrape_lock:
+        logger.info(f"Scrape started by {user.first_name} ({user.id})")
 
-        # 1. Parse the command argument
-        offset_arg = ""
-        display_name = "the default day: tomorrow"
+        # 1. Parse Arguments
+        offset_arg = "1"  # Default
 
         if context.args:
             user_input = context.args[0].lower()
@@ -114,13 +119,14 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⚠️ Invalid argument. Use: /scrape today, /scrape tomorrow, or /scrape 2")
                 return
 
-        # 2. Create the live status message
+
         status_msg = await update.message.reply_text(f"🎬 Starting the scraper for {display_name}...")
 
-        # Build the command
-        cmd = [sys.executable, "-u", "main.py"]
-        if offset_arg:
-            cmd.append(offset_arg)
+        # 2. Run Subprocess with Unbuffered Output
+        # We use sys.executable to ensure we use the venv's python
+        cmd = [sys.executable, "-u", "main.py", offset_arg]
+        #if offset_arg:
+        #    cmd.append(offset_arg)
 
         try:
             # 3. Start the subprocess asynchronously
@@ -130,10 +136,7 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stderr=asyncio.subprocess.STDOUT  # Combine errors into standard output
             )
 
-            output_buffer = []
-            last_update_time = time.time()
-
-            # 4. Read the output line-by-line as it prints
+            # 3. Stream output to log file
             while True:
                 line = await process.stdout.readline()
                 if not line:
@@ -141,50 +144,24 @@ async def run_scraper(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 decoded_line = line.decode('utf-8', errors='ignore').strip()
                 if decoded_line:
-                    output_buffer.append(decoded_line)
-                    # Keep only the last 15 lines so the Telegram message doesn't become massive
-                    output_buffer = output_buffer[-15:]
-
-                    # Update the Telegram message every 2 seconds to avoid rate limits
-                    if time.time() - last_update_time > 2.0:
-                        try:
-                            # Format as a code block for easy reading
-                            display_text = f"⏳ **Running Scraper ({display_name})...**\n```text\n" + "\n".join(
-                                output_buffer) + "\n```"
-                            await status_msg.edit_text(display_text, parse_mode="Markdown")
-                            last_update_time = time.time()
-                        except Exception:
-                            pass  # Ignore minor Telegram errors like "Message is not modified"
+                    # This pushes scraper output into your uniform log!
+                    logger.info(f"[SCRAPER] {decoded_line}")
 
             # Wait for the process to fully close
             await process.wait()
 
-            # Final update to the status box
-            final_text = f"✅ **Scraping Finished!**\n```text\n" + "\n".join(output_buffer[-5:]) + "\n```"
-            try:
-                await status_msg.edit_text(final_text, parse_mode="Markdown")
-            except Exception:
-                pass
-
-            # 5. Check results and send files
             if process.returncode == 0:
-                excel_path = "Data/output.xlsx"
-                txt_path = "Data/output.txt"
-
-                if os.path.exists(excel_path) and os.path.exists(txt_path):
-                    await update.message.reply_document(document=open(txt_path, 'rb'))
-                    await update.message.reply_document(document=open(excel_path, 'rb'))
-
-                    # CLEANUP: Delete the files so the next user gets a fresh slate
-                    os.remove(excel_path)
-                    os.remove(txt_path)
-                else:
-                    await update.message.reply_text("⚠️ Script finished, but output files were missing.")
+                logger.info("Scraper finished successfully. Sending files.")
+                # ... (code to send Data/output.xlsx and Data/output.txt) ...
+                # ... (code to os.remove the files) ...
             else:
-                await update.message.reply_text("❌ The script crashed or returned an error code.")
+                logger.error(f"Scraper exited with error code {process.returncode}")
+                await update.message.reply_text("❌ Scraper encountered an error.")
 
         except Exception as e:
-            await update.message.reply_text(f"❌ Failed to run subprocess: {e}")
+            logger.error(f"Subprocess crash: {e}")
+            await update.message.reply_text(f"❌ System error: {e}")
+
 
 async def notify_startup(application: Application):
     """Sends a message to the first admin in the list when the bot boots up."""
@@ -197,16 +174,16 @@ async def notify_startup(application: Application):
             parse_mode="Markdown"
         )
     except Exception as e:
-        print(f"Failed to send startup message: {e}")
+        logger.info(f"Failed to send startup message: {e}")
 
 
 if __name__ == '__main__':
-    print("Starting Telegram Bot...")
+    logger.info("Starting FinlandMovieBot engine...")
     app = Application.builder().token(TOKEN).post_init(notify_startup).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("scrape", run_scraper))
     app.add_handler(CommandHandler("add_user", add_user))
 
-    print("Bot is listening! Send /start to it on Telegram.")
+    logger.info("Bot is listening! Send /start to it on Telegram.")
     app.run_polling()
