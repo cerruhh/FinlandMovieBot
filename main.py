@@ -11,7 +11,10 @@ import sources_playwright
 from settings_get import read_settings
 from sources_playwright import normalizeTitle
 import sys
+import logging
+from logging_config import setup_uniform_logging
 
+logger = setup_uniform_logging("FinlandMovieBot")
 all_settings=read_settings()
 #from update_json import MovieUpdateFunction
 #MovieUpdateFunction()
@@ -42,6 +45,7 @@ class MovieNotFound(Exception):
 
 class NainDeStainError(Exception):
     pass
+
 
 def ExtractTime(time:str):
     """ extract time from source string, time is only relevant if there are more than 10 chaarcters"""
@@ -120,10 +124,11 @@ def lookup_movie_score_tm(movie_title:str):
         release_date_text = tmdb_release_date
     release_year = release_date_text.split("-")[0] if release_date_text != "NA" else "NA"
 
-    critic_score = movie_soup.find('rt-text', {"slot": "criticsScore"})
+    critic_score = movie_soup.find('rt-text', attrs={"slot": "critics-score"})
     tomatometer_value = extract_number(critic_score.text) if critic_score else "NA"
 
-    audience_score = movie_soup.find('rt-text', {"slot": "audienceScore"})
+
+    audience_score = movie_soup.find('rt-text', attrs={"slot": "audience-score"})
     audience_score_value = extract_number(audience_score.text) if audience_score else "NA"
     if audience_score_value == None:
         audience_score = tmdb_score
@@ -308,6 +313,17 @@ def contains_banned_genre(genres, banned_genres):
 
 #MAIN
 if __name__ == "__main__":
+
+    # Check if main.py was modified in the last hour  (3600 s)
+    file_mod_time = os.path.getmtime(__file__)
+    current_time = dt.datetime.now().timestamp()
+
+    if (current_time - file_mod_time) < 3600:
+        print("Detected recent update to main.py. Running conditional purges...")
+        conditional_purge("Data/tomato.json", "TomatoScore")  # Note: Use your actual dict key names
+        conditional_purge("Data/tomato.json", "AudienceScore")
+
+
     purge_old_items("Data/tomato.json", 30)  # purge the oldest items from the buffer, with value -1 all items are purged
     showsDict=sources_playwright.load_all(DAYOFFSET) #loads all the source data from the different theater websites
 
