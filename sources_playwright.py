@@ -56,9 +56,10 @@ def properCapitals(text):
 
 
 def normalizeTitle(title: str):
+    # some censoring, banned words, boycot
     removeWords = (
         "BARNSÖNDAGAR: ", "Pieni elokuvakerho: ", "KESÄKINO: ", "Espoo Ciné: ", "Seniorikino: ", "Perhekino: ",
-        "Kesäkino: ")
+        "Kesäkino: ", "Barnfestival: ")
     for censoredWord in removeWords:
         title = title.replace(censoredWord, "")
         title = properCapitals(title)

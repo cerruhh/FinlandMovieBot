@@ -272,11 +272,16 @@ def get_movie_data(buffer_file:str, movie_title:str) -> dict:
        # print(f"Retrieving data for '{movie_title}' from buffer.")
        return buffer_data[movie_title]
     else:
-        print(f"Fetching data for '{movie_title}' from website.")
+
         # Example URL (replace with actual URL and parameters)
         movie_data  = lookup_movie_score_tm(movie_title)
          # Add timestamp to the fetched data
         movie_data['Updated'] = dt.datetime.now().isoformat()
+
+        t_score = movie_data.get('TomatoScore', 'NA')
+        a_score = movie_data.get('AudienceScore', 'NA')
+        print(f"Scores for '{movie_title}' -> Tomato: {t_score}, Audience: {a_score}")
+
          # Store the fetched data in the buffer
         buffer_data[movie_title] = movie_data
         with open(buffer_file, 'w') as file:
