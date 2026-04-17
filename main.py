@@ -435,10 +435,42 @@ if __name__ == "__main__":
     #encoding="UTF-8"
     dataframe.to_csv(abspath("Data/output.csv"),index=False,encoding="UTF-8")
 
+
+
     with open(file=abspath("Data/output.txt"),mode="w",encoding="UTF-8") as file:
         file.truncate(0)
 
+        # 1. Create a subset for the Overview (Top Rated)
+        # Filter for rows that actually have data
+        overview_df = dataframe[
+            (dataframe['TomatoScore'].notna()) & (dataframe['TomatoScore'] != "NA") &
+            (dataframe['AudienceScore'].notna()) & (dataframe['AudienceScore'] != "NA") &
+            (dataframe['Average'].notna()) & (dataframe['Average'] != "NA")
+            ].copy()
+
+        # Safely convert to numeric:
+        # .astype(str) ensures .str.replace works even if data is currently numeric/None
+        # errors='coerce' turns anything unparseable into NaN, which we then drop
+        overview_df['sort_val'] = pd.to_numeric(
+            overview_df['Average'].astype(str).str.replace('%', ''),
+            errors='coerce'
+        )
+
+        # Remove any rows that failed conversion and sort
+        overview_df = overview_df.dropna(subset=['sort_val'])
+        overview_df = overview_df.sort_values(by='sort_val', ascending=False)
+
     with open(file=abspath("Data/output.txt"),mode="a",encoding="UTF-8") as txtfile:
+        txtfile.write("=== TOP RATED MOVIES ===\n")
+        # Use drop_duplicates so a movie shown in 5 theaters only appears once in the overview
+        for _, row in overview_df.drop_duplicates(subset=['ShowTitle']).iterrows():
+            txtfile.write(
+                f"{row['ShowTitle']} (Tomato: {row['TomatoScore']}% | Audience: {row['AudienceScore']}%)\n")
+
+        txtfile.write("\n" + "=" * 40 + "\n")
+        #txtfile.write("=== FULL SCHEDULE (CHRONOLOGICAL) ===\n\n")
+
+        # --- PART 2: THE FULL LIST ---
         counter=0
         for sn in dataframe.iterrows():
             if counter==0:
