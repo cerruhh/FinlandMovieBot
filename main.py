@@ -230,13 +230,16 @@ def conditional_purge(json_cache: str, key_to_check: str):
         data = json.load(file)  # Load the whole JSON file into dictionary "data"
 
     # Collect items to remove
-    items_to_remove = [key for key, value in data.items() if value.get(key_to_check) is None]
+    items_to_remove = [
+        key for key, value in data.items()
+        if value.get(key_to_check) is None or value.get(key_to_check) == "NA"
+    ]
 
     # Remove the marked items
-    print(f"# items in dictionary before purge: {len(data)}")
+    print(f"# items in dictionary before conditional purge: {len(data)} on {key_to_check}")
     for key in items_to_remove:
         data.pop(key)  # Remove the item from the dictionary
-    print(f"# items in dictionary after purge: {len(data)}")
+    print(f"# items in dictionary after conditional purge: {len(data)} on {key_to_check}")
 
     # Write the full file back to the JSON
     with open(file=json_cache, mode="w", encoding="UTF-8") as file:
