@@ -533,8 +533,8 @@ def load_all(day_offset: int = 1):
 
         # 1. Launch Arguments to hide automation
         browser = p.chromium.launch(
-            headless=False,  # <--- 1. CHANGED TO TRUE
-            slow_mo=1000,
+            headless=True,  # <--- 1. CHANGED TO TRUE
+            slow_mo=500,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--start-maximized",
