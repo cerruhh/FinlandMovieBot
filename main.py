@@ -112,7 +112,7 @@ def lookup_movie_score_tm(movie_title:str):
     movie_link = soup.find("h2", {"slot": "title", "data-qa": "search-result-title"}).find_next("a")["href"]
     movie_url = f"{movie_link}"
     movie_response = requests.get(movie_url)
-    print(f"Looking for {movie_title} on tomato: {movie_url} ")
+    #print(f"Looking for {movie_title} on tomato: {movie_url} ")
     # print(f"reference: {tmdb_title}, original title: {tmdb_original_title}, release: {tmdb_release_date}, synopsis: {tmdb_synopsis}, genre: {tmdb_genre_string}")
     movie_soup = BeautifulSoup(movie_response.content, 'html.parser')
 
@@ -153,7 +153,7 @@ def lookup_movie_score_tm(movie_title:str):
         #genres = ["NA"]
         tm_title = "no match"
 
-    return {"TomatoScore": tomatometer_value, "AudienceScore": audience_score_value, "Average": average, "TomatoYear": release_year, "TomatoTitle": tm_title, "Status": 200, "Synopsis": synopsis, "Genres": genres}
+    return {"TomatoScore": tomatometer_value, "AudienceScore": audience_score_value, "Average": average, "TomatoYear": release_year, "TomatoTitle": tm_title, "Status": 200, "Synopsis": synopsis, "Genres": genres, "TomatoURL": movie_url}
 
 
 def purge_old_items(json_cache:str, days=30):
@@ -275,12 +275,14 @@ def get_movie_data(buffer_file:str, movie_title:str) -> dict:
 
         # Example URL (replace with actual URL and parameters)
         movie_data  = lookup_movie_score_tm(movie_title)
+
          # Add timestamp to the fetched data
         movie_data['Updated'] = dt.datetime.now().isoformat()
+        movie_url = movie_data.get('TomatoURL', 'No URL generated')
 
         t_score = movie_data.get('TomatoScore', 'NA')
         a_score = movie_data.get('AudienceScore', 'NA')
-        print(f"Scores for '{movie_title}' -> Tomato: {t_score}, Audience: {a_score}")
+        print(f"Looking for {movie_title}: {movie_url}  -> Tomato: {t_score}, Audience: {a_score}")
 
          # Store the fetched data in the buffer
         buffer_data[movie_title] = movie_data
@@ -484,6 +486,14 @@ if __name__ == "__main__":
             PresMethod = sn[1].iloc[6]  # if move is 2D or 3D
             if PresMethod != "3D":
                 PresMethod = ""
+
+            # Grab ShowDate to extract mm-dd format
+            raw_date = str(sn[1].get('ShowDate', ''))  # e.g. "2026-06-14"
+            if len(raw_date) >= 10 and "-" in raw_date:
+                # Slices out "06-14" from "2026-06-14"
+                formatted_date = f"{raw_date[5:10]} "
+            else:
+                formatted_date = ""
             # 7 is the date that the movie is displayed in the theater
             #8 is the production year in the FInnkino theater data
             ProdYear=sn[1].iloc[9] #production year according to tomato website
@@ -494,7 +504,9 @@ if __name__ == "__main__":
 
             #Movie: Original title (ProductionYear) - Tomatometer% + audience score%
             #When & Where: dttmShowStart - dttmShowEndTheater - TheatreAuditorium, PresentationMethod
-            txtfile.write(f"{ShowStart} - {Name} ({ProdYear}) - {Tomato}+{AudienceScore} - {Theatername} {PresMethod} \n")
+            #txtfile.write(f"{ShowStart} - {Name} ({ProdYear}) - {Tomato}+{AudienceScore} - {Theatername} {PresMethod} \n")
+            txtfile.write(
+                f"{formatted_date}{ShowStart} - {Name} ({ProdYear}) - {Tomato}+{AudienceScore} - {Theatername} {PresMethod}\n")
 
     # con.send_message(msg)
     FILE_LIST=[

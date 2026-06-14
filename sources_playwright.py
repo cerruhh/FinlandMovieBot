@@ -188,7 +188,7 @@ def load_biorex(page, day_offset: int):
 def load_kinotfi(page, day_offset: int):
     URL = "https://www.kinot.fi/"
     target_date = calcDate(day_offset)
-    print(f"[INFO] Kinot.fi: Loading URL {URL}...")
+    print(f"[INFO] Kinot.fi: Loading URL {URL} for date {target_date}...")
 
     try:
         page.goto(URL, timeout=60000)
@@ -249,7 +249,7 @@ def load_kinotfi(page, day_offset: int):
 def load_konepajakino(page, day_offset: int):
     URL = "https://kinokonepaja.fi/"
     target_date = calcDate(day_offset)  # format YYYY-MM-DD
-    print(f"[INFO] Konepaja: Loading URL {URL}...")
+    print(f"[INFO] Konepaja: Loading URL {URL} for date {target_date}...")
 
     try:
         page.goto(URL, timeout=60000)
@@ -306,7 +306,7 @@ def load_konepajakino(page, day_offset: int):
 def load_gilda(page, day_offset: int):
     URL = "https://www.gilda.fi/elokuvat/"
     target_date = calcDate(day_offset)
-    print(f"[INFO] Gilda: Loading URL {URL}...")
+    print(f"[INFO] Gilda: Loading URL {URL} for date {target_date}...")
 
     try:
         page.goto(URL, timeout=60000)
