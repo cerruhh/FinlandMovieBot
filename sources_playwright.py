@@ -198,6 +198,7 @@ def load_kinotfi(page, day_offset: int):
 
         #print(f"[DEBUG] Kinot.fi: Selecting date value '{value_to_select}'...")
         page.wait_for_selector("#date-select")
+        time.sleep(5)
         page.select_option("#date-select", value=value_to_select)
 
         # Wait for reload/loading
@@ -532,8 +533,8 @@ def load_all(day_offset: int = 1):
 
         # 1. Launch Arguments to hide automation
         browser = p.chromium.launch(
-            headless=True,  # <--- 1. CHANGED TO TRUE
-            slow_mo=200,
+            headless=False,  # <--- 1. CHANGED TO TRUE
+            slow_mo=1000,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--start-maximized",
